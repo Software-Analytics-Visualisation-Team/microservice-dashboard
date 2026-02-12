@@ -37,6 +37,20 @@ This is a Dash-based web application for visualizing microservice call data. All
 - The app expects data at `data/inputs.csv` by default.
 - Default port is 8050.
 
+## Input Format
+| Attribute | Description |
+| --- | --- |
+| `timestamp` | Event timestamp for the trace entry. |
+| `service_name` | Name of the caller service. |
+| `event_code` | Code identifying the event type. |
+| `event_provider` | Source that emitted the event. |
+| `trace_id` | Identifier for a full distributed trace. |
+| `transaction_id` | Identifier for a transaction within a trace. |
+| `message` | Method or operation call details. |
+| `callee` | Name of the called service. |
+| `parsed` | Parsed representation of the raw message. |
+| `call_duration` | Duration of the call (latency). |
+
 ## User Guide
 
 1. Right side panel description:
