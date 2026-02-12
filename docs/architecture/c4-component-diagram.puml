@@ -1,0 +1,39 @@
+@startuml component_diagram
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_LEFT_RIGHT()
+
+Person(user, "User", "Explores microservice runtime relationships")
+System_Boundary(sys, "Microservice Data Visualization") {
+  Container_Boundary(dash_container, "Dash Web Application") {
+    Component(entrypoint, "app.py", "Python", "Application bootstrap and runtime entrypoint")
+    Component(factory, "msviz.app_factory", "Python", "Creates Dash app, wires layout and callbacks")
+    Component(layout, "msviz.layout", "Python", "Defines sidebar, tabs, charts and modals")
+    Component(callbacks, "msviz.callbacks", "Python", "Handles UI events, filtering and callback orchestration")
+    Component(graphs, "msviz.graphs", "Python", "Builds Cytoscape elements and Plotly figures")
+    Component(data_module, "msviz.data", "Python", "Loads CSV and builds metadata context")
+    Component(styles, "msviz.styles", "Python", "Defines Cytoscape stylesheet")
+  }
+
+  ContainerDb(csv_data, "data/inputs.csv", "CSV file", "Trace/service call event dataset")
+}
+
+System_Ext(browser, "Web Browser", "Renders Dash UI")
+System_Ext(dash_libs, "Dash / Plotly / Cytoscape libs", "Python packages")
+
+Rel(user, browser, "Uses")
+Rel(browser, entrypoint, "HTTP requests", "Dash/Flask")
+Rel(entrypoint, factory, "Invokes", "create_app()")
+Rel(factory, data_module, "Loads data and context")
+Rel(factory, layout, "Builds layout")
+Rel(factory, callbacks, "Registers callbacks")
+Rel(layout, styles, "Applies stylesheet")
+Rel(callbacks, graphs, "Builds figures and graph elements")
+Rel(data_module, csv_data, "Reads")
+Rel(factory, dash_libs, "Uses")
+Rel(layout, dash_libs, "Uses")
+Rel(callbacks, dash_libs, "Uses")
+Rel(graphs, dash_libs, "Uses")
+
+SHOW_LEGEND()
+@enduml
