@@ -3,37 +3,61 @@
 
 LAYOUT_LEFT_RIGHT()
 
-Person(user, "User", "Explores microservice runtime relationships")
-System_Boundary(sys, "Microservice Data Visualization") {
-  Container_Boundary(dash_container, "Dash Web Application") {
-    Component(entrypoint, "app.py", "Python", "Application bootstrap and runtime entrypoint")
-    Component(factory, "msviz.app_factory", "Python", "Creates Dash app, wires layout and callbacks")
-    Component(layout, "msviz.layout", "Python", "Defines sidebar, tabs, charts and modals")
-    Component(callbacks, "msviz.callbacks", "Python", "Handles UI events, filtering and callback orchestration")
-    Component(graphs, "msviz.graphs", "Python", "Builds Cytoscape elements and Plotly figures")
-    Component(data_module, "msviz.data", "Python", "Loads CSV and builds metadata context")
-    Component(styles, "msviz.styles", "Python", "Defines Cytoscape stylesheet")
-  }
-
-  ContainerDb(csv_data, "data/inputs.csv", "CSV file", "Trace/service call event dataset")
-}
-
+Person(user, "User", "Runs preprocessing and explores microservice runtime relationships")
 System_Ext(browser, "Web Browser", "Renders Dash UI")
 System_Ext(dash_libs, "Dash / Plotly / Cytoscape libs", "Python packages")
 
+System_Boundary(sys, "Microservice Data Visualization (Refactor Proposal)") {
+  Component(entrypoint, "app.py", "Python", "Runnable app wrapper & runtime entrypoint")
+  Container_Boundary(app_container, "Python Application") {
+    Component(cli, "msviz.cli", "Python", "Top-level CLI with commands: serve, preprocess, run")
+    
+    Container_Boundary(viz_pkg, "Visualization Package (msviz.visualization)") {
+      Component(viz_factory, "visualization.app_factory", "Python", "Creates Dash app and wires visualization components")
+      Component(viz_layout, "visualization.layout", "Python", "Defines page layout, tabs and modals")
+      Component(viz_callbacks, "visualization.callbacks", "Python", "Handles UI events and filtering")
+      Component(viz_graphs, "visualization.graphs", "Python", "Builds Cytoscape elements and Plotly figures")
+      Component(viz_data, "visualization.data", "Python", "Loads prepared dataset and builds context")
+      Component(viz_styles, "visualization.styles", "Python", "Defines Cytoscape stylesheet")
+    }
+
+    Container_Boundary(prep_pkg, "Preprocessing Package (msviz.preprocessing)") {
+      Component(prep_pipeline, "preprocessing.pipeline", "Python", "Orchestrates preprocessing steps")
+      Component(prep_extract, "preprocessing.extract_rows", "Python", "Filters client call rows from raw inputs")
+      Component(prep_analysis, "preprocessing.analysis", "Python", "Adds callee and call duration")
+      Component(prep_filter, "preprocessing.remove_null", "Python", "Removes rows with missing call duration")
+    }
+  }
+
+  ContainerDb(raw_csv, "Raw Input CSV", "CSV file", "Unprocessed trace/event input data")
+  ContainerDb(prepared_csv, "data/inputs.csv", "CSV file", "Prepared dataset consumed by dashboard")
+}
+
+Rel(user, cli, "Runs commands", "CLI")
 Rel(user, browser, "Uses")
-Rel(browser, entrypoint, "HTTP requests", "Dash/Flask")
-Rel(entrypoint, factory, "Invokes", "create_app()")
-Rel(factory, data_module, "Loads data and context")
-Rel(factory, layout, "Builds layout")
-Rel(factory, callbacks, "Registers callbacks")
-Rel(layout, styles, "Applies stylesheet")
-Rel(callbacks, graphs, "Builds figures and graph elements")
-Rel(data_module, csv_data, "Reads")
-Rel(factory, dash_libs, "Uses")
-Rel(layout, dash_libs, "Uses")
-Rel(callbacks, dash_libs, "Uses")
-Rel(graphs, dash_libs, "Uses")
+Rel(browser, cli, "HTTP requests", "Dash server via serve/run")
+Rel(entrypoint, cli, "Invokes", "Run Dashboard with default config")
+
+Rel(cli, prep_pipeline, "Invokes", "preprocess/run")
+Rel(cli, viz_factory, "Invokes", "serve/run")
+
+Rel(prep_pipeline, prep_extract, "Runs step")
+Rel(prep_pipeline, prep_analysis, "Runs step")
+Rel(prep_pipeline, prep_filter, "Runs step")
+Rel(prep_extract, raw_csv, "Reads")
+Rel(prep_filter, prepared_csv, "Writes final dataset")
+
+Rel(viz_factory, viz_data, "Loads data and context")
+Rel(viz_factory, viz_layout, "Builds layout")
+Rel(viz_factory, viz_callbacks, "Registers callbacks")
+Rel(viz_layout, viz_styles, "Applies stylesheet")
+Rel(viz_callbacks, viz_graphs, "Builds figures and graph elements")
+Rel(viz_data, prepared_csv, "Reads")
+
+Rel(viz_factory, dash_libs, "Uses")
+Rel(viz_layout, dash_libs, "Uses")
+Rel(viz_callbacks, dash_libs, "Uses")
+Rel(viz_graphs, dash_libs, "Uses")
 
 SHOW_LEGEND()
 @enduml

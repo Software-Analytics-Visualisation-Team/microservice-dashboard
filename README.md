@@ -1,8 +1,19 @@
-# microservice-dashboard
+# Microservice Dash App
 
-This is a Dash-based web application for visualizing microservice call data. All visualizations are generated based on the input file `inputs.csv` which contains extracted service to service calls from software traces.
+This is a Dash-based web application for visualizing microservice call data. All visualizations are generated based on the input file which prepared extracting service to service calls from traces from Autoloader.
+
+## Table of Contents
+
+- [Requirements](#requirements)
+- [Quick Start (Docker)](#quick-start-docker)
+- [Local Development](#local-development)
+- [CLI Commands](#cli-commands)
+- [Notes](#notes)
+- [Processed Data Format](#processed-data-format)
+- [User Guide](#user-guide)
 
 ## Requirements
+
 - Docker (recommended)
 - Or: Python 3.13.3 and pip
 
@@ -22,22 +33,61 @@ This is a Dash-based web application for visualizing microservice call data. All
 
 ## Local Development
 
-1. Install dependencies:
+1. Create and activate a virtual environment (PowerShell):
+   ```
+   cd src
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   ```
+
+2. Install dependencies:
    ```
    pip install -r requirements.txt
    ```
 
-2. Run the app:
+3. Show available CLI commands:
+   ```
+   python -m msviz --help
+   ```
+
+## CLI Commands
+
+Run commands from `src/`.
+
+1. Start dashboard only:
+   ```
+   python -m msviz serve
+   ```
+
+2. Run preprocessing only:
+   ```
+   python -m msviz preprocess
+   ```
+
+3. Run preprocessing and then start dashboard:
+   ```
+   python -m msviz run
+   ```
+
+4. Common options:
+   ```
+   python -m msviz serve --host 0.0.0.0 --port 8050 --debug
+   python -m msviz preprocess --input-csv data/raw_data.csv --output-csv data/processed_data.csv
+   python -m msviz run --input-csv data/raw_data.csv --output-csv data/processed_data.csv
+   ```
+
+5. Backward-compatible wrapper:
    ```
    python app.py
    ```
+   This delegates to the same CLI entrypoint.
 
 ## Notes
 
-- The app expects data at `data/inputs.csv` by default.
+- The app expects data at `data/processed_data.csv` by default.
 - Default port is 8050.
 
-## Input Format
+## Processed Data Format
 | Attribute | Description |
 | --- | --- |
 | `timestamp` | Event timestamp for the trace entry. |
@@ -57,15 +107,15 @@ This is a Dash-based web application for visualizing microservice call data. All
 - Total records: Total number of events in the dataset.
 - Start timestamp: Time of first events.
 - End timestamp: Time of the last event.
-- Select time range: Slider to select spesific time frame for the visualizations(Overall Service to Callee Service graph, Service to Callee Service Graph and Heatmap).
-- Select Trace ID: List of trace IDs based on the input data.
+- Select time range: Slider that provide user to select spesific time frame that generate visualizations(Overall Service to Callee Service graph, Service to Callee Service Graph and Heatmap).
+- Select Trace ID: List of trace IDs are recognized based on the input data.
 
 2. Graph description:
 
 - Overall Service to Callee Service graph (All Data):
 This graph visualizes service-to-service calls between the selected start and end timestamps. Each node represents a service, while each directed edge indicates a call from the caller service to the callee. The edge labels display the total number of calls across all methods between the two services.
 
-Clicking on an edge opens a histogram showing the distribution of call counts over time between the selected services.
+Clicking an edge opens a histogram showing the distribution of call counts over time between the selected services.
 
 In the full graph view, dark blue nodes and edges highlight the communication path for the currently selected trace ID. The user can switch the trace ID to explore different call paths.
 
