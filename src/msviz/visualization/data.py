@@ -1,4 +1,4 @@
-"""Data loading and metadata helpers."""
+"""Data loading and metadata helpers for visualization."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,17 +17,20 @@ class DataContext:
     max_timestamp: int
 
 
-def load_data(csv_path: str = "data/inputs.csv") -> pd.DataFrame:
+def load_data(csv_path: str = "data/processed_data.csv") -> pd.DataFrame:
     path = Path(csv_path)
     if not path.is_absolute() and not path.exists():
-        package_root = Path(__file__).resolve().parent.parent
+        file_path = Path(__file__).resolve()
+        project_root = file_path.parents[3]
+        source_root = file_path.parents[2]
         candidate_paths = [
-            package_root.parent / csv_path,
-            Path(__file__).resolve().parent / csv_path,
-            package_root / "inputs.csv",
+            project_root / path,
+            source_root / path,
+            Path.cwd() / path,
+            project_root / "data" / path.name,
         ]
 
-        for candidate in candidate_paths:
+        for candidate in dict.fromkeys(candidate_paths):
             if candidate.exists():
                 path = candidate
                 break

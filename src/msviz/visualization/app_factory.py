@@ -1,4 +1,4 @@
-"""Application factory."""
+"""Application factory for visualization."""
 
 import dash
 import dash_bootstrap_components as dbc
@@ -9,8 +9,8 @@ from .layout import build_layout
 from .styles import overall_stylesheet
 
 
-def create_app():
-    data = load_data()
+def create_app(data_path: str = "data/processed_data.csv"):
+    data = load_data(data_path)
     context = build_context(data)
 
     app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
