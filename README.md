@@ -1,6 +1,6 @@
 # Microservice Dash App
 
-This is a Dash-based web application for visualizing microservice call data. All visualizations are generated based on the input file which prepared extracting service to service calls from traces from Autoloader.
+This is a Dash-based web application for visualizing microservice call data. All visualizations are generated based on the input file which prepared extracting service to service calls.
 
 ## Table of Contents
 
