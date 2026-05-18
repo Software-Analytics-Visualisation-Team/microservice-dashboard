@@ -31,12 +31,43 @@ overall_stylesheet = [
         },
     },
     {
+        "selector": 'edge.flow',
+        "style": {
+        'line-style': 'dashed',
+        'line-dash-pattern': [10, 5],
+        'line-dash-offset': 0
+        }
+    },
+    {
         "selector": ".selected",
         "style": {
             "background-color": "#0074D9",
             "line-color": "#0074D9",
             "target-arrow-color": "#0074D9",
             "color": "#000",
+        },
+    },
+    {
+        "selector": "node.static-microservice",
+        "style": {
+            "shape": "round-rectangle",
+            "border-width": 2,
+            "border-color": "#495057",
+        },
+    },
+    {
+        "selector": "edge.static-edge",
+        "style": {
+            "line-style": "solid",
+            "line-color": "#767676",
+            "target-arrow-color": "#767676",
+            "opacity": 0.7,
+        },
+    },
+    {
+        "selector": ".static-hidden",
+        "style": {
+            "display": "none",
         },
     },
 ]

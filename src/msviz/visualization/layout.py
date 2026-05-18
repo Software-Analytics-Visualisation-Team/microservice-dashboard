@@ -2,11 +2,10 @@
 
 import dash_bootstrap_components as dbc
 import dash_cytoscape as cyto
-import plotly.express as px
 from dash import dcc, html
 
 
-def build_layout(context, data, overall_stylesheet):
+def build_layout(context, overall_stylesheet):
     sidebar = dbc.Col(
         [
             html.H5("Controls", className="mb-3"),
@@ -57,6 +56,12 @@ def build_layout(context, data, overall_stylesheet):
                 value=context.service_names[0] if context.service_names else None,
                 placeholder="Select a service_name",
             ),
+            dbc.Switch(
+                id="static-edges-toggle",
+                label="Show static dependencies",
+                value=False,
+                style={"marginTop": "20px"},
+            ),
         ],
         width=2,
         style={
@@ -70,9 +75,12 @@ def build_layout(context, data, overall_stylesheet):
     main_content = dbc.Col(
         [
             dcc.Tabs(
-                [
+                id="main-tabs",
+                value="runtime-dependency-graph",
+                children=[
                     dcc.Tab(
                         label="Runtime Dependency Graph",
+                        value="runtime-dependency-graph",
                         children=[
                             html.H4(
                                 "Overall Service to Callee Service Graph (All Data)",
@@ -110,6 +118,7 @@ def build_layout(context, data, overall_stylesheet):
                     ),
                     dcc.Tab(
                         label="Selected Trace Graph",
+                        value="selected-trace-graph",
                         children=[
                             html.H4(
                                 "Service to Callee Service Graph (Selected trace_id)",
@@ -149,6 +158,7 @@ def build_layout(context, data, overall_stylesheet):
                     ),
                     dcc.Tab(
                         label="Selected Span Graph",
+                        value="selected-span-graph",
                         children=[
                             html.H4(
                                 "Service to Callee Service Graph (Selected span_id)",
@@ -178,17 +188,19 @@ def build_layout(context, data, overall_stylesheet):
                     ),
                     dcc.Tab(
                         label="Call Counts Histogram",
+                        value="call-counts-histogram",
                         children=[
                             html.H4("Call Counts Histogram (All Data)", style={"marginTop": "40px"}),
                             dcc.Graph(
                                 id="event-code-histogram",
-                                figure=px.histogram(data, x="event_code", title="Call Counts"),
+                                figure={},
                                 style={"height": "600px"},
                             ),
                         ],
                     ),
                     dcc.Tab(
                         label="Call Duration Heatmap",
+                        value="call-duration-heatmap",
                         children=[
                             html.H4(
                                 "Call Duration Heatmap (Selected Service)",
@@ -199,12 +211,13 @@ def build_layout(context, data, overall_stylesheet):
                     ),
                     dcc.Tab(
                         label="Event Table",
+                        value="event-table",
                         children=[
                             html.H4("Event Table (Selected Trace)", style={"marginTop": "40px"}),
                             html.Div(id="event-table"),
                         ],
                     ),
-                ]
+                ],
             )
         ],
         width=10,

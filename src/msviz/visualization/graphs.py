@@ -64,7 +64,8 @@ def build_trace_elements(df: pd.DataFrame):
                         "source": row["service_name"],
                         "target": row["callee"],
                         "label": f"{row['event_code']} (avg: {row['call_duration']:.1f}ms)",
-                    }
+                    },
+                    "classes": "flow",
                 }
             )
 
@@ -98,7 +99,8 @@ def build_span_elements(df: pd.DataFrame):
                     "source": row["service_name"],
                     "target": row["callee"],
                     "label": f"{row['event_code']} (avg: {row['call_duration']:.1f}ms)",
-                }
+                },
+                "classes": "flow",
             }
         )
     return cy_nodes + cy_edges
@@ -151,11 +153,86 @@ def get_global_incoming_range(data: pd.DataFrame):
     return min(incoming_counts.values()), max(incoming_counts.values())
 
 
+def build_static_graph_elements(static_data: dict):
+    static_data = static_data or {}
+    microservices = static_data.get("static_services", {})
+    packages = static_data.get("packages", {})
+    functions = static_data.get("functions", {})
+
+    def _node_id(entity_type: str, name: str) -> str:
+        if entity_type == "microservice":
+            return name
+        return f"static:{entity_type}:{name}"
+
+    name_to_id = {}
+    for name in microservices:
+        name_to_id[name] = _node_id("microservice", name)
+    for name in packages:
+        name_to_id[name] = _node_id("package", name)
+    for name in functions:
+        name_to_id[name] = _node_id("function", name)
+
+    cy_nodes = []
+    for idx, name in enumerate(sorted(microservices.keys())):
+        cy_nodes.append(
+            {
+                "data": {"id": _node_id("microservice", name), "label": name},
+                "classes": "node",
+                "position": {"x": 80, "y": 80 + idx * 70},
+            }
+        )
+
+    for idx, value in packages.items():
+        parent_id = name_to_id.get(value.get("parent"))
+        cy_nodes.append(
+            {
+                "data": {
+                    "id": _node_id("package", idx),
+                    "label": idx,
+                    "parent": parent_id,
+                },
+                "classes": "static static-package static-hidden",
+            }
+        )
+
+    for idx, value in functions.items():
+        parent_id = name_to_id.get(value.get("parent"))
+        cy_nodes.append(
+            {
+                "data": {
+                    "id": _node_id("function", idx),
+                    "label": idx,
+                    "parent": parent_id,
+                },
+                "classes": "static static-function static-hidden",
+            }
+        )
+
+    cy_edges = []
+    for name, properties in microservices.items():
+        for dependency in properties.get("dependencies", []) or []:
+            if dependency not in microservices:
+                continue
+            cy_edges.append(
+                {
+                    "data": {
+                        "source": _node_id("microservice", name),
+                        "target": _node_id("microservice", dependency),
+                        "label": "",
+                    },
+                    "classes": "static static-edge",
+                }
+            )
+
+    return cy_nodes + cy_edges
+
+
 def build_overall_graph_elements(
     filtered_data: pd.DataFrame,
     global_min_count: int,
     global_max_count: int,
     selected_trace_id=None,
+    static_elements=None,
 ):
     df_grouped = (
         filtered_data.dropna(subset=["service_name", "callee"])
@@ -180,13 +257,12 @@ def build_overall_graph_elements(
 
     cy_nodes = []
     for node in nodes:
-        node_data = {"id": node, "label": node}
         count = incoming_counts.get(node, 0)
         hex_color = mcolors.rgb2hex(cmap(norm(count)))
         classes = "selected" if node in selected_nodes else ""
         cy_nodes.append(
             {
-                "data": node_data,
+                "data": {"id": node, "label": node},
                 "classes": classes,
                 "style": {"background-color": hex_color},
             }
@@ -194,7 +270,9 @@ def build_overall_graph_elements(
 
     cy_edges = []
     for _, row in df_grouped.iterrows():
-        classes = "selected" if (row["service_name"], row["callee"]) in selected_edges else ""
+        classes = "flow"
+        if (row["service_name"], row["callee"]) in selected_edges:
+            classes += " selected"
         cy_edges.append(
             {
                 "data": {
@@ -206,20 +284,35 @@ def build_overall_graph_elements(
             }
         )
 
-    return cy_nodes + cy_edges
+    runtime_node_ids = {element["data"]["id"] for element in cy_nodes}
+    static_elements = static_elements or []
+
+    included_static_nodes = []
+    included_static_node_ids = set()
+    for element in static_elements:
+        data = element.get("data", {})
+        if "source" in data:
+            continue
+
+        node_id = data.get("id")
+        parent_id = data.get("parent")
+        if node_id in runtime_node_ids or parent_id in runtime_node_ids:
+            included_static_nodes.append(element)
+            included_static_node_ids.add(node_id)
+
+    included_static_edges = []
+    for element in static_elements:
+        data = element.get("data", {})
+        source = data.get("source")
+        target = data.get("target")
+        if not source or not target:
+            continue
+        if source in runtime_node_ids and target in runtime_node_ids:
+            included_static_edges.append(element)
+
+    return cy_nodes + included_static_nodes + cy_edges + included_static_edges
 
 
-def build_all_event_code_histogram(data: pd.DataFrame):
-    event_counts = (
-        data.groupby("event_code")
-        .size()
-        .reset_index(name="count")
-        .sort_values("count", ascending=False)
-    )
-
-    fig = px.bar(event_counts, x="event_code", y="count", title="Call Counts")
-    fig.update_layout(height=800)
-    return fig
 
 
 def build_selected_edge_violinplot(
@@ -242,6 +335,17 @@ def build_selected_edge_violinplot(
     fig.update_layout(height=500)
     return fig
 
+def build_all_event_code_histogram(data: pd.DataFrame):
+    event_counts = (
+        data.groupby("event_code")
+        .size()
+        .reset_index(name="count")
+        .sort_values("count", ascending=False)
+    )
+
+    fig = px.bar(event_counts, x="event_code", y="count", title="Call Counts")
+    fig.update_layout(height=800)
+    return fig
 
 def build_edge_event_code_histogram(data: pd.DataFrame, source: str, target: str):
     df_edge = data[(data["service_name"] == source) & (data["callee"] == target)]

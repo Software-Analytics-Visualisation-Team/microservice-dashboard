@@ -1,6 +1,7 @@
 """Dash callback registrations."""
 
 import pandas as pd
+from copy import deepcopy
 from dash import Input, Output, State
 
 from .graphs import (
@@ -16,41 +17,76 @@ from .graphs import (
 )
 
 
-def register_callbacks(app, data, overall_stylesheet):
-    global_min_count, global_max_count = get_global_incoming_range(data)
+def register_callbacks(app, runtime_data, static_elements, overall_stylesheet):
+    global_min_count, global_max_count = get_global_incoming_range(runtime_data)
 
     def _is_empty_figure(figure):
         return isinstance(figure, dict) and not figure
+    
+    @app.callback(
+    Output("overall-cytoscape-graph", "stylesheet"),
+    [
+        Input("static-edges-toggle", "value"),
+    ],
+    )
+    def update_overall_stylesheet(show_static_dependencies):
+
+        copied_stylesheet = deepcopy(overall_stylesheet)
+        for rule in copied_stylesheet:
+            if rule.get("selector") == "edge.static-edge":
+                rule["style"]["display"] = "element" if show_static_dependencies else "none"
+
+        return copied_stylesheet
 
     @app.callback(
         [
             Output("cytoscape-graph", "elements"),
-            Output("cytoscape-graph", "stylesheet"),
             Output("event-table", "children"),
-            Output("overall-cytoscape-graph", "elements"),
         ],
-        [Input("trace-id-dropdown", "value"), Input("time-range-slider", "value")],
+        [
+            Input("trace-id-dropdown", "value"),
+            Input("time-range-slider", "value"),
+            Input("main-tabs", "value"),
+        ],
     )
-    def update_dashboard(selected_trace_id, time_range):
+    def update_dashboard(selected_trace_id, time_range, _active_tab):
         start_dt = pd.to_datetime(time_range[0], unit="s")
         end_dt = pd.to_datetime(time_range[1], unit="s")
 
-        filtered_data = data[
-            (data["timestamp"] >= start_dt) & (data["timestamp"] <= end_dt)
+        filtered_data = runtime_data[
+            (runtime_data["timestamp"] >= start_dt) & (runtime_data["timestamp"] <= end_dt)
         ]
 
         if not selected_trace_id:
-            return [], overall_stylesheet, "No trace_id selected.", []
+            return [], "No trace_id selected."
 
         df = filtered_data[filtered_data["trace_id"] == selected_trace_id]
 
         elements = build_trace_elements(df)
         table_html = build_event_table(df)
-        overall_elements = build_overall_graph_elements(
-            filtered_data, global_min_count, global_max_count, selected_trace_id
-        )
+        return elements, table_html
 
-        return elements, overall_stylesheet, table_html, overall_elements
+    @app.callback(
+        Output("overall-cytoscape-graph", "elements"),
+        [
+            Input("trace-id-dropdown", "value"),
+            Input("time-range-slider", "value"),
+            Input("main-tabs", "value"),
+        ],
+    )
+    def update_overall_graph(selected_trace_id, time_range, _active_tab):
+        start_dt = pd.to_datetime(time_range[0], unit="s")
+        end_dt = pd.to_datetime(time_range[1], unit="s")
+        filtered_data = runtime_data[
+            (runtime_data["timestamp"] >= start_dt) & (runtime_data["timestamp"] <= end_dt)
+        ]
+        return build_overall_graph_elements(
+            filtered_data,
+            global_min_count,
+            global_max_count,
+            selected_trace_id,
+            static_elements,
+        )
 
     @app.callback(
         Output("slider-tooltip", "children"), Input("time-range-slider", "value")
@@ -65,7 +101,7 @@ def register_callbacks(app, data, overall_stylesheet):
         Input("overall-cytoscape-graph", "tapEdgeData"),
     )
     def update_event_code_histogram(_edge_data):
-        return build_all_event_code_histogram(data)
+        return build_all_event_code_histogram(runtime_data)
 
     @app.callback(
         Output("span-id-dropdown", "options"), Input("trace-id-dropdown", "value")
@@ -74,7 +110,7 @@ def register_callbacks(app, data, overall_stylesheet):
         if not selected_trace_id:
             return []
 
-        filtered_df = data[data["trace_id"] == selected_trace_id]
+        filtered_df = runtime_data[runtime_data["trace_id"] == selected_trace_id]
         span_ids = filtered_df["transaction_id"].dropna().unique()
         return [
             {
@@ -101,14 +137,14 @@ def register_callbacks(app, data, overall_stylesheet):
         start_dt = pd.to_datetime(time_range[0], unit="s")
         end_dt = pd.to_datetime(time_range[1], unit="s")
 
-        df = data[
-            (data["transaction_id"] == selected_span_id)
-            & (data["timestamp"] >= start_dt)
-            & (data["timestamp"] <= end_dt)
+        df = runtime_data[
+            (runtime_data["transaction_id"] == selected_span_id)
+            & (runtime_data["timestamp"] >= start_dt)
+            & (runtime_data["timestamp"] <= end_dt)
         ].copy()
 
         if df.empty:
-            return [], overall_stylesheet, "No data for selected span."
+            return [], overall_stylesheet, "No runtime_data for selected span."
 
         elements = build_span_elements(df)
         table_html = build_event_table(df)
@@ -121,8 +157,8 @@ def register_callbacks(app, data, overall_stylesheet):
     def update_heatmap(selected_service, time_range):
         start_dt = pd.to_datetime(time_range[0], unit="s")
         end_dt = pd.to_datetime(time_range[1], unit="s")
-        filtered_data = data[
-            (data["timestamp"] >= start_dt) & (data["timestamp"] <= end_dt)
+        filtered_data = runtime_data[
+            (runtime_data["timestamp"] >= start_dt) & (runtime_data["timestamp"] <= end_dt)
         ]
         return build_service_heatmap_figure(filtered_data, selected_service)
 
@@ -139,7 +175,7 @@ def register_callbacks(app, data, overall_stylesheet):
         if edge_data:
             source = edge_data["source"]
             target = edge_data["target"]
-            fig = build_edge_event_code_histogram(data, source, target)
+            fig = build_edge_event_code_histogram(runtime_data, source, target)
             if not _is_empty_figure(fig):
                 return True, fig
         return False, {}
@@ -163,12 +199,12 @@ def register_callbacks(app, data, overall_stylesheet):
             start_dt = pd.to_datetime(time_range[0], unit="s")
             end_dt = pd.to_datetime(time_range[1], unit="s")
 
-            filtered_df = data[
-                (data["trace_id"] == selected_trace_id)
-                & (data["service_name"] == source)
-                & (data["callee"] == target)
-                & (data["timestamp"] >= start_dt)
-                & (data["timestamp"] <= end_dt)
+            filtered_df = runtime_data[
+                (runtime_data["trace_id"] == selected_trace_id)
+                & (runtime_data["service_name"] == source)
+                & (runtime_data["callee"] == target)
+                & (runtime_data["timestamp"] >= start_dt)
+                & (runtime_data["timestamp"] <= end_dt)
             ]
             fig = build_selected_edge_violinplot(filtered_df, source, target)
             if not _is_empty_figure(fig):
