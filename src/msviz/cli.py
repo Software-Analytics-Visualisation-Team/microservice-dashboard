@@ -4,35 +4,31 @@ import argparse
 import sys
 from collections.abc import Sequence
 
-from .preprocessing import run_preprocessing
-
-
-def _add_shared_server_flags(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=8050)
-    parser.add_argument("--debug", action="store_true")
-    parser.add_argument("--data-path", default="data/processed_data.csv")
-
+from .preprocessing import run_preprocessing, run_static_preprocessing
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="msviz")
     subparsers = parser.add_subparsers(dest="command")
 
     serve_parser = subparsers.add_parser("serve", help="Start the Dash application")
-    _add_shared_server_flags(serve_parser)
+    serve_parser.add_argument("--host", default="0.0.0.0")
+    serve_parser.add_argument("--port", type=int, default=8050)
+    serve_parser.add_argument("--debug", action="store_true")
+    serve_parser.add_argument("--data_path", default="data/processed_runtime_data.csv")
 
     preprocess_parser = subparsers.add_parser(
         "preprocess", help="Run data preprocessing pipeline"
     )
-    preprocess_parser.add_argument("--input-csv", default=None)
-    preprocess_parser.add_argument("--output-csv", default=None)
-
-    run_parser = subparsers.add_parser(
-        "run", help="Run preprocessing pipeline and then start the Dash application"
+    preprocess_parser.add_argument("--input_csv", default=None)
+    preprocess_parser.add_argument("--output_csv", default=None)
+    
+    
+    static_preprocess_parser = subparsers.add_parser(
+        "preprocess_static", help="Run static data preprocessing pipeline"
     )
-    run_parser.add_argument("--input-csv", default=None)
-    run_parser.add_argument("--output-csv", default=None)
-    _add_shared_server_flags(run_parser)
+    static_preprocess_parser.add_argument("--service_config_yml", default=None)
+    static_preprocess_parser.add_argument("--symbol_data_path", default=None)
+    static_preprocess_parser.add_argument("--output_csv", default=None)
 
     return parser
 
@@ -59,25 +55,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "preprocess":
         result = run_preprocessing(args.input_csv, args.output_csv)
         print(
-            "Preprocessing complete: "
-            f"{result.input_rows} rows -> {result.output_rows} rows, "
+            "Preprocessing complete: \n"
+            f"{result.input_rows} rows -> {result.output_rows} rows, \n"
             f"output={result.output_path}"
         )
         return 0
-
-    if args.command == "run":
-        result = run_preprocessing(args.input_csv, args.output_csv)
-        data_path = args.data_path
-        if args.output_csv:
-            data_path = args.output_csv
-
+    
+    if args.command == "preprocess_static":
+        result = run_static_preprocessing(
+            input_path=args.service_config_yml,
+            output_csv=args.output_csv,
+            symbol_data_dir=args.symbol_data_path,
+        )
+        data_model = result.data_model
         print(
-            "Preprocessing complete: "
-            f"{result.input_rows} rows -> {result.output_rows} rows, "
+            "Static Data Preprocessing complete: \n"
+            f"Microservices: {len(data_model.microservices)} "
+            f"Packages: {len(data_model.packages)} "
+            f"Functions: {len(data_model.functions)}\n"
             f"output={result.output_path}"
         )
-        _run_server(args.host, args.port, args.debug, data_path)
         return 0
 
-    parser.error("Please specify one of: serve, preprocess, run")
+    parser.error("Please specify one of: serve, preprocess, preprocess_static")
     return 2
