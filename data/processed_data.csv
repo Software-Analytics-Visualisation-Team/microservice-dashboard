@@ -142,7 +142,7 @@ timestamp,service_name,event_code,event_provider,trace_id,transaction_id,message
 2025-06-03 11:32:17:528,S1,m43,infrastructure,t12,486ac470-b845-45c5-82fb-c8a924a87dfe,"-> Client, 2970299:S11:1, SetCassetteInGripper NotPresent",S11,2025-06-03 11:32:17.528,0.005
 2025-06-03 11:32:34:837,S2,m44,infrastructure,t13,35f9bace-7f64-4e15-9d35-b875d80e1e26,"-> Client, 2970299:S10:45, PlaceCapsule list[size:12]",S10,2025-06-03 11:32:34.837,0.003
 2025-06-03 11:32:47:821,S1,m45,infrastructure,t14,5e7c29cb-bb18-4b8a-be7c-53fda7cac136,"-> Client, 2970299:S3:1, Claim",S3,2025-06-03 11:32:47.821,0.004
-2025-06-03 11:32:47:822,S3,m46,infrastructure,t14,5e7c29cb-bb18-4b8a-be7c-53fda7cac136,"-> Client, 2970299:S7:1, ClaimStage AutoloaderTemStage",S7,2025-06-03 11:32:47.822,0.003
+2025-06-03 11:32:47:822,S3,m46,infrastructure,t14,5e7c29cb-bb18-4b8a-be7c-53fda7cac136,"-> Client, 2970299:S7:1, ClaimStage ATemStage",S7,2025-06-03 11:32:47.822,0.003
 2025-06-03 11:32:47:823,S7,m47,infrastructure,t14,5e7c29cb-bb18-4b8a-be7c-53fda7cac136,"-> Client, 2970299:S10:42, Claim",S10,2025-06-03 11:32:47.823,0.002
 2025-06-03 11:32:48:827,S1,m48,infrastructure,t14,5e7c29cb-bb18-4b8a-be7c-53fda7cac136,"-> Client, 2970299:S4:1, StartCartridgeSensorMeasurement",S4,2025-06-03 11:32:48.827,0.003
 2025-06-03 11:32:48:828,S4,m33,infrastructure,t14,5e7c29cb-bb18-4b8a-be7c-53fda7cac136,"-> Client, 2970299:S6:222, Set 1",S6,2025-06-03 11:32:48.828,0.002
@@ -1700,7 +1700,7 @@ timestamp,service_name,event_code,event_provider,trace_id,transaction_id,message
 2025-06-03 11:35:37:405,S1,m77,infrastructure,t18,cc478cdf-0288-4c94-87dc-e234921f9cb2,"-> Client, 2970299:S4:3, AttachCapsule",S4,2025-06-03 11:35:37.405,0.009
 2025-06-03 11:35:37:407,S4,m33,infrastructure,t18,cc478cdf-0288-4c94-87dc-e234921f9cb2,"-> Client, 2970299:S6:221, Set 1",S6,2025-06-03 11:35:37.407,0.007
 2025-06-03 11:35:37:409,S6,m78,infrastructure,t18,cc478cdf-0288-4c94-87dc-e234921f9cb2,"-> Client, 2970299:S10:2, LockCapsule",S10,2025-06-03 11:35:37.409,0.005
-2025-06-03 11:35:47:491,S1,m79,infrastructure,t18,cc478cdf-0288-4c94-87dc-e234921f9cb2,"-> Client, 2970299:S8:1, VentAutoloader",S8,2025-06-03 11:35:47.491,0.003
+2025-06-03 11:35:47:491,S1,m79,infrastructure,t18,cc478cdf-0288-4c94-87dc-e234921f9cb2,"-> Client, 2970299:S8:1, VentA",S8,2025-06-03 11:35:47.491,0.003
 2025-06-03 11:35:47:494,S1,m80,infrastructure,t18,cc478cdf-0288-4c94-87dc-e234921f9cb2,"-> Client, 2970299:S8:21, Execute",S8,2025-06-03 11:35:47.494,0.0
 2025-06-03 11:35:47:979,S9,m33,infrastructure,t19,adfa2723-c7d3-44da-883f-4d9ef28df767,"-> Client, 2970299:S6:16, Set 2",S6,2025-06-03 11:35:47.979,0.004
 2025-06-03 11:35:47:980,S6,m69,infrastructure,t19,adfa2723-c7d3-44da-883f-4d9ef28df767,"-> Client, 2970299:S10:11, Close",S10,2025-06-03 11:35:47.980,0.003
@@ -1766,7 +1766,7 @@ timestamp,service_name,event_code,event_provider,trace_id,transaction_id,message
 2025-06-03 11:35:54:479,S1,m41,infrastructure,t18,cc478cdf-0288-4c94-87dc-e234921f9cb2,"-> Client, 2970299:S4:9, StartDetection",S4,2025-06-03 11:35:54.479,0.001
 2025-06-03 11:35:54:480,S1,m42,infrastructure,t18,cc478cdf-0288-4c94-87dc-e234921f9cb2,"-> Client, 2970299:S4:9, StopDetection",S4,2025-06-03 11:35:54.480,0.0
 2025-06-03 11:35:54:483,S1,m43,infrastructure,t18,cc478cdf-0288-4c94-87dc-e234921f9cb2,"-> Client, 2970299:S11:1, SetCassetteInGripper NotPresent",S11,2025-06-03 11:35:54.483,0.002
-2025-06-03 11:35:54:486,S1,m88,infrastructure,t18,cc478cdf-0288-4c94-87dc-e234921f9cb2,"-> Client, 2970299:S8:1, PumpAutoloader",S8,2025-06-03 11:35:54.486,0.003
+2025-06-03 11:35:54:486,S1,m88,infrastructure,t18,cc478cdf-0288-4c94-87dc-e234921f9cb2,"-> Client, 2970299:S8:1, PumpA",S8,2025-06-03 11:35:54.486,0.003
 2025-06-03 11:35:54:489,S1,m80,infrastructure,t18,cc478cdf-0288-4c94-87dc-e234921f9cb2,"-> Client, 2970299:S8:18, Execute",S8,2025-06-03 11:35:54.489,0.0
 2025-06-03 11:35:55:245,S9,m33,infrastructure,t28,a557eb9c-99aa-4fd6-a3f4-9b398800dc3b,"-> Client, 2970299:S6:12, Set 1",S6,2025-06-03 11:35:55.245,0.005
 2025-06-03 11:35:55:246,S6,m58,infrastructure,t28,a557eb9c-99aa-4fd6-a3f4-9b398800dc3b,"-> Client, 2970299:S10:12, Open",S10,2025-06-03 11:35:55.246,0.004
