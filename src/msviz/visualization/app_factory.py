@@ -12,6 +12,19 @@ from .layout import build_layout
 from .styles import overall_stylesheet
 
 
+def _build_initial_store_data(runtime_data, static_elements):
+    """Serialize the loaded data into the format used by dcc.Store."""
+    records = runtime_data.assign(
+        timestamp=runtime_data["timestamp"].astype(str)
+    ).to_dict("records")
+    return {
+        "runtime_records": records,
+        "static_elements": static_elements,
+        "service_names": sorted(runtime_data["service_name"].dropna().unique().tolist()),
+        "trace_ids": runtime_data["trace_id"].dropna().unique().tolist(),
+    }
+
+
 def create_app(
     data_path: str = "data/processed_runtime_data.csv",
     static_data_path: str = "data/processed_static_data.csv",
@@ -20,8 +33,9 @@ def create_app(
     static_data = load_static_data(static_data_path)
     static_elements = build_static_graph_elements(static_data)
     context = build_context(runtime_data, static_data)
+    initial_data = _build_initial_store_data(runtime_data, static_elements)
 
     app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
-    app.layout = build_layout(context, overall_stylesheet)
-    register_callbacks(app, runtime_data, static_elements, overall_stylesheet)
+    app.layout = build_layout(context, overall_stylesheet, initial_data)
+    register_callbacks(app, overall_stylesheet)
     return app

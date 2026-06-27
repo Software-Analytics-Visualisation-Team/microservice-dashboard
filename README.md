@@ -17,19 +17,15 @@ This is a Dash-based web application for visualizing microservice call data. All
 - Docker (recommended)
 - Or: Python 3.13.3 and pip
 
-## Quick Start (Docker)
+## Quick Start (Docker) (In root)
 
-1. Build the Docker image:
+1. Run the container:
    ```
-   docker build -t microservice_data .
+   docker compose up
    ```
+   You can use the `--build` flag to force a build.
 
-2. Run the container:
-   ```
-   docker run -p 8050:8050 --name microservice_data microservice_data
-   ```
-
-3. Open the userr browser and go to [http://localhost:8050](http://localhost:8050)
+2. Open the userr browser and go to [http://localhost:8050](http://localhost:8050)
 
 ## Local Development
 

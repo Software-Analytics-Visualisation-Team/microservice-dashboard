@@ -5,62 +5,115 @@ import dash_cytoscape as cyto
 from dash import dcc, html
 
 
-def build_layout(context, overall_stylesheet):
+def build_layout(context, overall_stylesheet, initial_data=None):
     sidebar = dbc.Col(
         [
-            html.H5("Controls", className="mb-3"),
-            html.Div(f"Total records: {context.num_records}"),
-            html.Div(f"Start time: {context.first_timestamp}"),
-            html.Div(f"End time: {context.last_timestamp}"),
-            html.Label("Select Time Range:", style={"marginTop": "40px"}),
             html.Div(
-                id="slider-tooltip",
-                style={"marginBottom": "10px", "fontWeight": "bold"},
-            ),
-            dcc.RangeSlider(
-                id="time-range-slider",
-                min=context.min_timestamp,
-                max=context.max_timestamp,
-                value=[context.min_timestamp, context.max_timestamp],
-                marks={
-                    context.min_timestamp: context.first_timestamp,
-                    context.max_timestamp: context.last_timestamp,
-                },
-                step=1,
-            ),
-            html.Label("Select Trace ID:", style={"marginTop": "40px"}),
-            dcc.Dropdown(
-                id="trace-id-dropdown",
-                options=[
-                    {
-                        "label": (f"{str(tid)[:8]}..." if len(str(tid)) > 8 else str(tid)),
-                        "value": tid,
-                    }
-                    for tid in context.trace_ids
+                id="upload-section",
+                children=[
+                    html.H6("Knowledge Graph", style={"marginBottom": "8px", "fontWeight": "600"}),
+                    dcc.Upload(
+                        id="graph-upload",
+                        children=html.Div([
+                            "Drag & Drop or ",
+                            html.A("Browse", style={"color": "#0074D9", "cursor": "pointer"}),
+                        ]),
+                        style={
+                            "width": "100%",
+                            "padding": "12px 6px",
+                            "borderWidth": "2px",
+                            "borderStyle": "dashed",
+                            "borderColor": "#adb5bd",
+                            "borderRadius": "6px",
+                            "textAlign": "center",
+                            "fontSize": "13px",
+                            "cursor": "pointer",
+                        },
+                        accept=".json",
+                    ),
+                    html.Div(
+                        id="upload-status",
+                        style={"fontSize": "12px", "marginTop": "6px", "color": "#198754"},
+                    ),
                 ],
-                value=context.trace_ids[0] if context.trace_ids else None,
-                placeholder="Select a trace_id",
+                style={
+                    "marginBottom": "20px",
+                    "paddingBottom": "16px",
+                    "borderBottom": "1px solid #dee2e6",
+                },
             ),
-            html.Label("Select Span ID:", style={"marginTop": "40px"}),
-            dcc.Dropdown(
-                id="span-id-dropdown",
-                options=[],
-                value=None,
-                placeholder="Select a transaction_id (Span ID)",
+            html.H5("Controls", className="mb-3"),
+            html.Div(id="meta-records", children=f"Total records: {context.num_records}"),
+            html.Div(id="meta-start", children=f"Start time: {context.first_timestamp}"),
+            html.Div(id="meta-end", children=f"End time: {context.last_timestamp}"),
+            html.Div(
+                id="slider-section",
+                children=[
+                    html.Label("Select Time Range:", style={"marginTop": "40px"}),
+                    html.Div(
+                        id="slider-tooltip",
+                        style={"marginBottom": "10px", "fontWeight": "bold"},
+                    ),
+                    dcc.RangeSlider(
+                        id="time-range-slider",
+                        min=context.min_timestamp,
+                        max=context.max_timestamp,
+                        value=[context.min_timestamp, context.max_timestamp],
+                        marks={
+                            context.min_timestamp: context.first_timestamp,
+                            context.max_timestamp: context.last_timestamp,
+                        },
+                        step=1,
+                    ),
+                ],
             ),
-            html.H5("Heatmap controls", style={"marginTop": "40px"}),
-            html.Label("Select Service Name:"),
-            dcc.Dropdown(
-                id="service-name-dropdown",
-                options=[{"label": name, "value": name} for name in context.service_names],
-                value=context.service_names[0] if context.service_names else None,
-                placeholder="Select a service_name",
+            html.Div(
+                id="trace-section",
+                children=[
+                    html.Label("Select Trace ID:", style={"marginTop": "40px"}),
+                    dcc.Dropdown(
+                        id="trace-id-dropdown",
+                        options=[],
+                        value=None,
+                        placeholder="Select a trace_id",
+                    ),
+                ],
             ),
-            dbc.Switch(
-                id="static-edges-toggle",
-                label="Show static dependencies",
-                value=False,
-                style={"marginTop": "20px"},
+            html.Div(
+                id="span-section",
+                children=[
+                    html.Label("Select Span ID:", style={"marginTop": "40px"}),
+                    dcc.Dropdown(
+                        id="span-id-dropdown",
+                        options=[],
+                        value=None,
+                        placeholder="Select a transaction_id (Span ID)",
+                    ),
+                ],
+            ),
+            html.Div(
+                id="heatmap-section",
+                children=[
+                    html.H5("Heatmap controls", style={"marginTop": "40px"}),
+                    html.Label("Select Service Name:"),
+                    dcc.Dropdown(
+                        id="service-name-dropdown",
+                        options=[],
+                        value=None,
+                        placeholder="Select a service_name",
+                    ),
+                ],
+            ),
+            html.Div(
+                id="static-toggle-section",
+                children=[
+                    dbc.Switch(
+                        id="static-edges-toggle",
+                        label="Show static dependencies",
+                        value=False,
+                        style={"marginTop": "20px"},
+                    ),
+                ],
             ),
         ],
         width=2,
@@ -90,9 +143,15 @@ def build_layout(context, overall_stylesheet):
                                 cyto.Cytoscape(
                                     id="overall-cytoscape-graph",
                                     layout={
-                                        "name": "breadthfirst",
+                                        "name": "cose",
                                         "directed": True,
-                                        "padding": 10,
+                                        "animate": False,
+                                        "padding": 30,
+                                        "nodeRepulsion": 400000,
+                                        "idealEdgeLength": 100,
+                                        "edgeElasticity": 100,
+                                        "gravity": 80,
+                                        "numIter": 1000,
                                     },
                                     style={"width": "100%", "height": "800px"},
                                     elements=[],
@@ -217,6 +276,62 @@ def build_layout(context, overall_stylesheet):
                             html.Div(id="event-table"),
                         ],
                     ),
+                    dcc.Tab(
+                        label="Trace Replay",
+                        value="trace-replay",
+                        children=[
+                            html.H4("Trace Replay (Selected Trace)", style={"marginTop": "40px"}),
+                            html.Div(
+                                id="replay-step-label",
+                                children="Select a trace to start replay",
+                                style={
+                                    "fontSize": "16px",
+                                    "fontWeight": "bold",
+                                    "textAlign": "center",
+                                    "marginBottom": "8px",
+                                },
+                            ),
+                            html.Div(
+                                [
+                                    dbc.Button("< Prev", id="replay-prev-btn", color="secondary", size="sm", style={"marginRight": "6px"}),
+                                    dbc.Button("Play", id="replay-play-btn", color="primary", size="sm", style={"marginRight": "6px"}),
+                                    dbc.Button("Next >", id="replay-next-btn", color="secondary", size="sm"),
+                                ],
+                                style={"textAlign": "center", "marginBottom": "12px"},
+                            ),
+                            html.Div(
+                                dcc.Slider(
+                                    id="replay-step-slider",
+                                    min=0,
+                                    max=0,
+                                    value=0,
+                                    marks={0: "1"},
+                                    step=1,
+                                ),
+                                style={"marginBottom": "20px"},
+                            ),
+                            html.Div(
+                                cyto.Cytoscape(
+                                    id="trace-replay-graph",
+                                    layout={
+                                        "name": "circle",
+                                        "padding": 40,
+                                        "animate": False,
+                                    },
+                                    style={"width": "100%", "height": "580px"},
+                                    elements=[],
+                                    stylesheet=[],
+                                ),
+                                style={
+                                    "border": "2px solid #0074D9",
+                                    "borderRadius": "8px",
+                                    "padding": "10px",
+                                    "background": "#fff",
+                                },
+                            ),
+                            html.Div(id="replay-info-panel"),
+                        ],
+                    ),
                 ],
             )
         ],
@@ -224,6 +339,11 @@ def build_layout(context, overall_stylesheet):
     )
 
     return dbc.Container(
-        [dbc.Row([sidebar, main_content], style={"margin": "0", "height": "100vh"})],
+        [
+            dcc.Store(id="data-store", data=initial_data),
+            dcc.Store(id="replay-step", data=0),
+            dcc.Interval(id="replay-interval", interval=1000, disabled=True),
+            dbc.Row([sidebar, main_content], style={"margin": "0", "height": "100vh"}),
+        ],
         fluid=True,
     )

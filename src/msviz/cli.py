@@ -30,6 +30,22 @@ def build_parser() -> argparse.ArgumentParser:
     static_preprocess_parser.add_argument("--symbol_data_path", default=None)
     static_preprocess_parser.add_argument("--output_csv", default=None)
 
+    build_graph_parser = subparsers.add_parser(
+        "build_graph", help="Build knowledge graph JSON from the two processed CSVs"
+    )
+    build_graph_parser.add_argument(
+        "--runtime_csv", default=None,
+        help="Path to processed_runtime_data.csv (default: data/processed_runtime_data.csv)",
+    )
+    build_graph_parser.add_argument(
+        "--static_csv", default=None,
+        help="Path to processed_static_data.csv (default: data/processed_static_data.csv)",
+    )
+    build_graph_parser.add_argument(
+        "--output", default=None,
+        help="Output JSON path (default: data/knowledge_graph.json)",
+    )
+
     return parser
 
 
@@ -77,5 +93,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
 
-    parser.error("Please specify one of: serve, preprocess, preprocess_static")
+    if args.command == "build_graph":
+        from pathlib import Path as _Path
+        from .graph_builder import build_graph, save_graph, default_output_path
+
+        # Resolve default CSV paths relative to this file (repo_root/data/)
+        _data_dir = _Path(__file__).resolve().parent.parent.parent / "data"
+        runtime_csv = _Path(args.runtime_csv) if args.runtime_csv else _data_dir / "processed_runtime_data.csv"
+        static_csv  = _Path(args.static_csv)  if args.static_csv  else _data_dir / "processed_static_data.csv"
+        output_path = _Path(args.output)       if args.output       else default_output_path(runtime_csv)
+
+        graph = build_graph(runtime_csv, static_csv)
+        save_graph(graph, output_path)
+
+        n_nodes = len(graph["nodes"])
+        n_edges = len(graph["edges"])
+        print(
+            f"Knowledge graph built: {n_nodes} nodes, {n_edges} edges\n"
+            f"Output: {output_path}"
+        )
+        return 0
+
+    parser.error("Please specify one of: serve, preprocess, preprocess_static, build_graph")
     return 2

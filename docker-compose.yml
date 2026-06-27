@@ -1,0 +1,11 @@
+services:
+  msviz:
+    build:
+      context: .
+      dockerfile: src/Dockerfile
+    ports:
+      - "8050:8050"
+    volumes:
+      - ./src:/app
+      - ./data:/data
+    command: ["python", "app.py", "serve", "--debug"]

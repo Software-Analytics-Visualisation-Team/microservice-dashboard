@@ -2,11 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
-COPY data/inputs.csv /app/data/inputs.csv
+COPY src/requirements.txt .
+COPY data/ /data/
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-COPY . .
+COPY src/ .
 
 EXPOSE 8050
 
