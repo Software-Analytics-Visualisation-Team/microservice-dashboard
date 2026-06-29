@@ -136,6 +136,9 @@ def register_callbacks(app, overall_stylesheet):
             "static_elements": static_elems,
             "service_names": sorted(runtime_df["service_name"].dropna().unique().tolist()),
             "trace_ids": runtime_df["trace_id"].dropna().unique().tolist(),
+            "static_services": static_dict.get("static_services", {}),
+            "static_packages": static_dict.get("packages", {}),
+            "static_functions": static_dict.get("functions", {}),
         }
         n_nodes = len(graph.get("nodes", []))
         n_edges = len(graph.get("edges", []))
@@ -392,6 +395,81 @@ def register_callbacks(app, overall_stylesheet):
             if isinstance(fig, dict) and fig:
                 return True, fig
         return False, {}
+
+    @app.callback(
+        [
+            Output("service-detail-modal", "is_open"),
+            Output("service-modal-title", "children"),
+            Output("service-info-panel", "children"),
+            Output("service-hierarchy-panel", "children"),
+        ],
+        Input("overall-cytoscape-graph", "tapNodeData"),
+        State("data-store", "data"),
+        prevent_initial_call=True,
+    )
+    def show_service_detail(node_data, store_data):
+        from collections import defaultdict
+        if not node_data or not store_data:
+            return False, "", [], []
+
+        service = node_data["id"]
+        runtime_data, _ = _parse_store(store_data)
+        static_services = store_data.get("static_services", {})
+        packages = store_data.get("static_packages", {})
+        functions = store_data.get("static_functions", {})
+
+        # ── Info panel ──────────────────────────────────────────────────
+        outgoing = int((runtime_data["service_name"] == service).sum())
+        incoming = int((runtime_data["callee"] == service).sum())
+        deps = static_services.get(service, {}).get("dependencies", [])
+
+        info = [
+            html.H5(service, className="mb-3"),
+            html.P([html.Strong("Outgoing calls: "), str(outgoing)]),
+            html.P([html.Strong("Incoming calls: "), str(incoming)]),
+            html.P(html.Strong("Static dependencies:")),
+            html.Ul([html.Li(d) for d in deps]) if deps else html.P("None", className="text-muted"),
+        ]
+
+        # ── Hierarchy panel ──────────────────────────────────────────────
+        # Packages owned by this service
+        my_packages = sorted(pkg for pkg, v in packages.items() if v.get("parent") == service)
+
+        accordion_items = []
+        for pkg in my_packages:
+            # Functions whose event_code falls under this package
+            pkg_functions = {ec: v for ec, v in functions.items() if ec.startswith(pkg + ".")}
+
+            # Group by interface/structure (the parent field on each function)
+            by_structure = defaultdict(list)
+            for ec, v in pkg_functions.items():
+                struct = v.get("parent") or "—"
+                fn_name = ec.split(".")[-1]
+                by_structure[struct].append(fn_name)
+
+            structure_rows = []
+            for struct, fns in sorted(by_structure.items()):
+                structure_rows.append(
+                    html.Li([
+                        html.Strong(struct),
+                        html.Ul([html.Li(fn, style={"fontFamily": "monospace", "fontSize": "12px"}) for fn in sorted(fns)]),
+                    ])
+                )
+
+            accordion_items.append(
+                dbc.AccordionItem(
+                    html.Ul(structure_rows) if structure_rows else html.P("No interfaces found.", className="text-muted"),
+                    title=pkg,
+                )
+            )
+
+        hierarchy = (
+            dbc.Accordion(accordion_items, start_collapsed=True, always_open=True)
+            if accordion_items
+            else html.P("No static package data available for this service.", className="text-muted")
+        )
+
+        return True, service, info, hierarchy
 
     @app.callback(
         [Output("selected-edge-modal", "is_open"), Output("selected-edge-violinplot", "figure")],

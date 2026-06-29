@@ -167,6 +167,21 @@ def build_layout(context, overall_stylesheet, initial_data=None):
                                 size="lg",
                                 is_open=False,
                             ),
+                            dbc.Modal(
+                                [
+                                    dbc.ModalHeader(dbc.ModalTitle(id="service-modal-title")),
+                                    dbc.ModalBody(
+                                        dbc.Row([
+                                            dbc.Col(html.Div(id="service-info-panel"), width=4),
+                                            dbc.Col(html.Div(id="service-hierarchy-panel"), width=8),
+                                        ])
+                                    ),
+                                ],
+                                id="service-detail-modal",
+                                size="xl",
+                                is_open=False,
+                                scrollable=True,
+                            ),
                         ],
                     ),
                     dcc.Tab(
