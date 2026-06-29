@@ -45,6 +45,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--output", default=None,
         help="Output JSON path (default: data/knowledge_graph.json)",
     )
+    build_graph_parser.add_argument(
+        "--neo4j-uri", default=None,
+        help="Neo4j URI (e.g. bolt://localhost:7687). If given, pushes the graph to Neo4j.",
+    )
+    build_graph_parser.add_argument(
+        "--neo4j-password", default="",
+        help="Neo4j password (default: empty string).",
+    )
 
     return parser
 
@@ -112,6 +120,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"Knowledge graph built: {n_nodes} nodes, {n_edges} edges\n"
             f"Output: {output_path}"
         )
+
+        if args.neo4j_uri:
+            from .neo4j_client import push_graph
+            push_graph(graph, args.neo4j_uri, ("neo4j", args.neo4j_password))
+            print(f"Graph pushed to Neo4j at {args.neo4j_uri}")
+
         return 0
 
     parser.error("Please specify one of: serve, preprocess, preprocess_static, build_graph")

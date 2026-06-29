@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -107,6 +108,13 @@ class DataContext:
 
 
 def load_runtime_data(csv_path: str = "data/processed_runtime_data.csv") -> pd.DataFrame:
+    neo4j_uri = os.getenv("NEO4J_URI")
+    if neo4j_uri:
+        from ..neo4j_client import load_graph_from_neo4j
+        auth = (os.getenv("NEO4J_USER", "neo4j"), os.getenv("NEO4J_PASSWORD", ""))
+        print("[i] Using runtime data from neo4j using " + neo4j_uri)
+        return _graph_to_runtime_df(load_graph_from_neo4j(neo4j_uri, auth))
+
     path = Path(csv_path)
     if not path.is_absolute() or not path.exists():
         package_root = Path(__file__).resolve().parent.parent.parent.parent
@@ -122,6 +130,7 @@ def load_runtime_data(csv_path: str = "data/processed_runtime_data.csv") -> pd.D
     # If a knowledge graph JSON exists next to the CSV, prefer it
     graph_path = path.parent / "knowledge_graph.json"
     if graph_path.exists():
+        print("[i] Using runtime data from knowledge_graph.json")
         return _graph_to_runtime_df(load_graph(graph_path))
 
     data = pd.read_csv(path)
@@ -129,12 +138,20 @@ def load_runtime_data(csv_path: str = "data/processed_runtime_data.csv") -> pd.D
     data["timestamp"] = pd.to_datetime(
         data["timestamp"], format="%Y-%m-%d %H:%M:%S:%f", errors="coerce"
     )
+    print("[i] Using runtime data from " + path)
     return data
 
 
 def load_static_data(
     csv_path: str = "data/processed_static_data.csv",
 ) -> dict:
+    neo4j_uri = os.getenv("NEO4J_URI")
+    if neo4j_uri:
+        from ..neo4j_client import load_graph_from_neo4j
+        auth = (os.getenv("NEO4J_USER", "neo4j"), os.getenv("NEO4J_PASSWORD", ""))
+        print("[i] Using static data from neo4j using " + neo4j_uri)
+        return _graph_to_static_dict(load_graph_from_neo4j(neo4j_uri, auth))
+
     path = Path(csv_path)
     if not path.is_absolute() or not path.exists():
         package_root = Path(__file__).resolve().parent.parent.parent.parent
@@ -150,6 +167,7 @@ def load_static_data(
     # If a knowledge graph JSON exists next to the CSV, prefer it
     graph_path = path.parent / "knowledge_graph.json"
     if graph_path.exists():
+        print("[i] Using static data from knowledge_graph.json")
         return _graph_to_static_dict(load_graph(graph_path))
 
     data = pd.read_csv(path)
@@ -182,6 +200,7 @@ def load_static_data(
         elif entity_type == "function":
             functions[entity_name] = properties
 
+    print("[i] Using static data from " + path)
     return {
         "static_services": static_services,
         "packages": packages,

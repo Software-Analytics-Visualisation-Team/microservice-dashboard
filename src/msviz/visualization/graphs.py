@@ -174,11 +174,17 @@ def build_static_graph_elements(static_data: dict):
 
     cy_nodes = []
     for idx, name in enumerate(sorted(microservices.keys())):
+        row = idx // 5
+        col = idx % 5
+
         cy_nodes.append(
             {
                 "data": {"id": _node_id("microservice", name), "label": name},
                 "classes": "node",
-                "position": {"x": 80, "y": 80 + idx * 70},
+                "position": {
+                    "x": 80 + col * 200,
+                    "y": 80 + row * 200,
+                },
             }
         )
 
@@ -244,7 +250,7 @@ def build_overall_graph_elements(
 
     selected_edges = set()
     selected_nodes = set()
-    if selected_trace_id:
+    if selected_trace_id and selected_trace_id != "-":
         df_selected = filtered_data[filtered_data["trace_id"] == selected_trace_id]
         selected_edges = set(zip(df_selected["service_name"], df_selected["callee"]))
         selected_nodes = set(df_selected["service_name"]).union(
@@ -255,18 +261,37 @@ def build_overall_graph_elements(
     norm = mcolors.Normalize(vmin=global_min_count, vmax=global_max_count)
     cmap = cm.get_cmap("coolwarm")
 
+    parent_ids = {
+        element.get("data", {}).get("parent")
+        for element in (static_elements or [])
+        if element.get("data", {}).get("parent")
+    }
+
+    static_positions = {
+        element.get("data", {}).get("id"): element.get("position")
+        for element in (static_elements or [])
+        if element.get("position")
+    }
+
     cy_nodes = []
     for node in nodes:
         count = incoming_counts.get(node, 0)
         hex_color = mcolors.rgb2hex(cmap(norm(count)))
         classes = "selected" if node in selected_nodes else ""
-        cy_nodes.append(
-            {
-                "data": {"id": node, "label": node},
-                "classes": classes,
-                "style": {"background-color": hex_color},
-            }
-        )
+        is_parent = node in parent_ids
+        node_element = {
+            "data": {"id": node, "label": node},
+            "classes": classes,
+            "style": {
+                "background-color": hex_color,
+                "shape": "rectangle" if is_parent else "circle"
+            },
+        }
+
+        if node in static_positions:
+            node_element["position"] = static_positions[node]
+
+        cy_nodes.append(node_element)
 
     cy_edges = []
     for _, row in df_grouped.iterrows():
@@ -287,19 +312,6 @@ def build_overall_graph_elements(
     runtime_node_ids = {element["data"]["id"] for element in cy_nodes}
     static_elements = static_elements or []
 
-    included_static_nodes = []
-    included_static_node_ids = set()
-    for element in static_elements:
-        data = element.get("data", {})
-        if "source" in data:
-            continue
-
-        node_id = data.get("id")
-        parent_id = data.get("parent")
-        if node_id in runtime_node_ids or parent_id in runtime_node_ids:
-            included_static_nodes.append(element)
-            included_static_node_ids.add(node_id)
-
     included_static_edges = []
     for element in static_elements:
         data = element.get("data", {})
@@ -310,7 +322,7 @@ def build_overall_graph_elements(
         if source in runtime_node_ids and target in runtime_node_ids:
             included_static_edges.append(element)
 
-    return cy_nodes + included_static_nodes + cy_edges + included_static_edges
+    return cy_nodes + cy_edges + included_static_edges
 
 
 

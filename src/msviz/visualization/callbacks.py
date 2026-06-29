@@ -35,7 +35,7 @@ _SECTION_TAB_EVENT_TABLE = "event-table"
 _SECTION_TAB_TRACE_REPLAY = "trace-replay"
 _SECTION_TABS = {
     "slider-section": {_SECTION_TAB_RUNTIME, _SECTION_TAB_TRACE_GRAPH, _SECTION_TAB_SPAN_GRAPH, _SECTION_TAB_HEATMAP, _SECTION_TAB_EVENT_TABLE},
-    "trace-section": {_SECTION_TAB_TRACE_GRAPH, _SECTION_TAB_SPAN_GRAPH, _SECTION_TAB_EVENT_TABLE, _SECTION_TAB_TRACE_REPLAY},
+    "trace-section": {_SECTION_TAB_RUNTIME, _SECTION_TAB_TRACE_GRAPH, _SECTION_TAB_SPAN_GRAPH, _SECTION_TAB_EVENT_TABLE, _SECTION_TAB_TRACE_REPLAY},
     "span-section": {_SECTION_TAB_SPAN_GRAPH},
     "heatmap-section": {_SECTION_TAB_HEATMAP},
     "static-toggle-section": {_SECTION_TAB_RUNTIME},
@@ -146,7 +146,10 @@ def register_callbacks(app, overall_stylesheet):
     # ------------------------------------------------------------------ #
 
     @app.callback(
-        [Output("trace-id-dropdown", "options"), Output("trace-id-dropdown", "value")],
+        [
+            Output("trace-id-dropdown", "options"), 
+            Output("trace-id-dropdown", "value")
+        ],
         Input("data-store", "data"),
     )
     def update_trace_dropdown(store_data):
@@ -245,7 +248,7 @@ def register_callbacks(app, overall_stylesheet):
             (runtime_data["timestamp"] >= start_dt) & (runtime_data["timestamp"] <= end_dt)
         ]
 
-        if not selected_trace_id:
+        if not selected_trace_id or selected_trace_id == "-":
             return [], "No trace_id selected."
 
         df = filtered_data[filtered_data["trace_id"] == selected_trace_id]
@@ -293,7 +296,7 @@ def register_callbacks(app, overall_stylesheet):
         State("data-store", "data"),
     )
     def update_span_id_dropdown(selected_trace_id, store_data):
-        if not selected_trace_id:
+        if not selected_trace_id or selected_trace_id == "-":
             return []
         runtime_data, _ = _parse_store(store_data)
         if runtime_data.empty:
@@ -518,7 +521,7 @@ def register_callbacks(app, overall_stylesheet):
     def render_replay_graph(step, trace_id, store_data):
         runtime_data, _ = _parse_store(store_data)
 
-        if runtime_data.empty or not trace_id:
+        if runtime_data.empty or not trace_id or trace_id == "-":
             return [], _REPLAY_STYLESHEET, "No trace selected", ""
 
         df = (
