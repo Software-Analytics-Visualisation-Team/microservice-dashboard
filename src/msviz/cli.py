@@ -1,10 +1,14 @@
 """Top-level CLI for visualization and preprocessing."""
 
 import argparse
+import os
 import sys
 from collections.abc import Sequence
+from pathlib import Path as _Path
 
 from .preprocessing import run_preprocessing, run_static_preprocessing
+from .graph_builder import build_graph, save_graph, default_output_path
+from .analysis.neo4j_client import Neo4jClient
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="msviz")
@@ -14,7 +18,6 @@ def build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--host", default="0.0.0.0")
     serve_parser.add_argument("--port", type=int, default=8050)
     serve_parser.add_argument("--debug", action="store_true")
-    serve_parser.add_argument("--data_path", default="data/processed_runtime_data.csv")
 
     preprocess_parser = subparsers.add_parser(
         "preprocess", help="Run data preprocessing pipeline"
@@ -57,10 +60,10 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _run_server(host: str, port: int, debug: bool, data_path: str) -> None:
+def _run_server(host: str, port: int, debug: bool) -> None:
     from .visualization import create_app
 
-    app = create_app(data_path=data_path)
+    app = create_app()
     app.run(debug=debug, host=host, port=port)
 
 
@@ -73,7 +76,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(args_list)
 
     if args.command == "serve":
-        _run_server(args.host, args.port, args.debug, args.data_path)
+        _run_server(args.host, args.port, args.debug)
         return 0
 
     if args.command == "preprocess":
@@ -102,9 +105,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "build_graph":
-        from pathlib import Path as _Path
-        from .graph_builder import build_graph, save_graph, default_output_path
-
         # Resolve default CSV paths relative to this file (repo_root/data/)
         _data_dir = _Path(__file__).resolve().parent.parent.parent / "data"
         runtime_csv = _Path(args.runtime_csv) if args.runtime_csv else _data_dir / "processed_runtime_data.csv"
@@ -122,8 +122,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
 
         if args.neo4j_uri:
-            from .neo4j_client import push_graph
-            push_graph(graph, args.neo4j_uri, ("neo4j", args.neo4j_password))
+            os.environ["NEO4J_URI"] = args.neo4j_uri
+            os.environ["NEO4J_PASSWORD"] = args.neo4j_password
+            
+            Neo4jClient.push_graph(graph)
             print(f"Graph pushed to Neo4j at {args.neo4j_uri}")
 
         return 0

@@ -6,39 +6,15 @@ import dash_bootstrap_components as dbc
 prefix = os.getenv("DASH_URL_PREFIX", "/")
 
 from .callbacks import register_callbacks
-from .data import build_context, load_runtime_data, load_static_data
-from .graphs import build_static_graph_elements
+from .data import build_context
 from .layout import build_layout
 from .styles import overall_stylesheet
 
 
-def _build_initial_store_data(runtime_data, static_elements, static_data):
-    """Serialize the loaded data into the format used by dcc.Store."""
-    records = runtime_data.assign(
-        timestamp=runtime_data["timestamp"].astype(str)
-    ).to_dict("records")
-    return {
-        "runtime_records": records,
-        "static_elements": static_elements,
-        "service_names": sorted(runtime_data["service_name"].dropna().unique().tolist()),
-        "trace_ids": runtime_data["trace_id"].dropna().unique().tolist(),
-        "static_services": static_data.get("static_services", {}),
-        "static_packages": static_data.get("packages", {}),
-        "static_functions": static_data.get("functions", {}),
-    }
-
-
-def create_app(
-    data_path: str = "data/processed_runtime_data.csv",
-    static_data_path: str = "data/processed_static_data.csv",
-):
-    runtime_data = load_runtime_data(data_path)
-    static_data = load_static_data(static_data_path)
-    static_elements = build_static_graph_elements(static_data)
-    context = build_context(runtime_data, static_data)
-    initial_data = _build_initial_store_data(runtime_data, static_elements, static_data)
+def create_app():
+    context = build_context()
 
     app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
-    app.layout = build_layout(context, overall_stylesheet, initial_data)
+    app.layout = build_layout(context, overall_stylesheet)
     register_callbacks(app, overall_stylesheet)
     return app

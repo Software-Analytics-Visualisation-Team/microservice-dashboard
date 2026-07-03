@@ -4,44 +4,11 @@ import dash_bootstrap_components as dbc
 import dash_cytoscape as cyto
 from dash import dcc, html
 
+cyto.load_extra_layouts()
 
-def build_layout(context, overall_stylesheet, initial_data=None):
+def build_layout(context, overall_stylesheet):
     sidebar = dbc.Col(
         [
-            html.Div(
-                id="upload-section",
-                children=[
-                    html.H6("Knowledge Graph", style={"marginBottom": "8px", "fontWeight": "600"}),
-                    dcc.Upload(
-                        id="graph-upload",
-                        children=html.Div([
-                            "Drag & Drop or ",
-                            html.A("Browse", style={"color": "#0074D9", "cursor": "pointer"}),
-                        ]),
-                        style={
-                            "width": "100%",
-                            "padding": "12px 6px",
-                            "borderWidth": "2px",
-                            "borderStyle": "dashed",
-                            "borderColor": "#adb5bd",
-                            "borderRadius": "6px",
-                            "textAlign": "center",
-                            "fontSize": "13px",
-                            "cursor": "pointer",
-                        },
-                        accept=".json",
-                    ),
-                    html.Div(
-                        id="upload-status",
-                        style={"fontSize": "12px", "marginTop": "6px", "color": "#198754"},
-                    ),
-                ],
-                style={
-                    "marginBottom": "20px",
-                    "paddingBottom": "16px",
-                    "borderBottom": "1px solid #dee2e6",
-                },
-            ),
             html.H5("Controls", className="mb-3"),
             html.Div(id="meta-records", children=f"Total records: {context.num_records}"),
             html.Div(id="meta-start", children=f"Start time: {context.first_timestamp}"),
@@ -143,9 +110,14 @@ def build_layout(context, overall_stylesheet, initial_data=None):
                                 cyto.Cytoscape(
                                     id="overall-cytoscape-graph",
                                     layout={
-                                        "name": "preset",
+                                        "name": "dagre",
                                         "animate": False,
                                         "padding": 30,
+                                        "rankDir": "TB",       # top-to-bottom flow, edges point downward
+                                        "nodeSep": 100,         # horizontal spacing between nodes in same rank
+                                        "rankSep": 80,         # vertical spacing between layers
+                                        "edgeSep": 10,
+                                        "ranker": "network-simplex",  # minimizes edge cross
                                     },
                                     style={"width": "100%", "height": "max(600px, calc(100vh - 114px - 68px - 40px))"},
                                     elements=[],
@@ -349,7 +321,6 @@ def build_layout(context, overall_stylesheet, initial_data=None):
 
     return dbc.Container(
         [
-            dcc.Store(id="data-store", data=initial_data),
             dcc.Store(id="replay-step", data=0),
             dcc.Interval(id="replay-interval", interval=1000, disabled=True),
             dbc.Row([sidebar, main_content], style={"margin": "0", "height": "100vh"}),

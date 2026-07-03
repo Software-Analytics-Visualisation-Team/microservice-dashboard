@@ -21,6 +21,7 @@ Mapping from original data:
   trace_id group    -> ExecutionTrace node
 """
 
+from datetime import datetime
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -38,28 +39,34 @@ NODE_COLORS = {
     "RuntimeInvocation": "#95a5a6",
 }
 
+def _parse_static_name(name: str):
+    """Split a static name into its parts by '/'."""
+    parts = name.split("/")
+    return parts
 
-def _parse_event_code(event_code: str):
-    """Split a dotted event code into (module_path, structure_name, operation_name).
+def _define_node_type(part: str):
+    """Determine the node type based on the part name."""
+    if part.find("service") != -1:
+        return "Service"
+    if part.find("package") != -1:
+        return "Module"
+    elif part.find("interface") != -1:
+        return "Structure"
+    elif part.find("function") != -1:
+        return "Operation"
+    raise ValueError(f"Unknown node type for part: {part}")
 
-    Convention:
-      last segment      = operation (function)
-      second-to-last    = structure (interface)
-      everything before = module path (package chain, may be empty)
-
-    Examples:
-      'pkg1.pkg2.interface_1.function_1' -> ('pkg1.pkg2', 'interface_1', 'function_1')
-      'pkg1.interface_2.function_2'      -> ('pkg1', 'interface_2', 'function_2')
-      'interface_3.function_3'           -> (None, 'interface_3', 'function_3')
-      'function_4'                       -> (None, None, 'function_4')
-    """
-    parts = event_code.split(".")
-    if len(parts) == 1:
-        return None, None, parts[0]
-    if len(parts) == 2:
-        return None, parts[0], parts[1]
-    return ".".join(parts[:-2]), parts[-2], parts[-1]
-
+def _define_node_id(part: str):
+    """Determine the node ID based on the part name."""
+    if part.find("service") != -1:
+        return f"service:{part}"
+    if part.find("package") != -1:
+        return f"module:{part}"
+    elif part.find("interface") != -1:
+        return f"structure:{part}"
+    elif part.find("function") != -1:
+        return f"operation:{part}"
+    raise ValueError(f"Unknown node ID for part: {part}")
 
 def build_graph(runtime_csv: str | Path, static_csv: str | Path) -> dict:
     """Read the two processed CSVs and return a knowledge graph as a plain dict.
@@ -71,8 +78,8 @@ def build_graph(runtime_csv: str | Path, static_csv: str | Path) -> dict:
     runtime_df = pd.read_csv(runtime_csv)
     static_df = pd.read_csv(static_csv)
 
-    nodes = {}       # node_id -> node dict; Python dicts preserve insertion order
-    edges = []       # list of edge dicts
+    nodes = {}          # node_id -> node dict; Python dicts preserve insertion order
+    edges = []          # list of edge dicts
     seen_edges = set()  # (source, target, type) to deduplicate structural edges
 
     def add_node(node_id, label, name=None, **extra):
@@ -100,110 +107,126 @@ def build_graph(runtime_csv: str | Path, static_csv: str | Path) -> dict:
     # --- One System node that owns all services ---
     add_node("system", "System", name="system")
 
-    # --- Service nodes: one per microservice row in the static CSV ---
+    # --- Add nodes and edges from the static CSV ---
     for _, row in static_df.iterrows():
         print(row)
-        if str(row.get("type", "")).strip().lower() == "microservice":
-            svc_id = str(row["name"]).strip()
-            add_node(svc_id, "Service", name=svc_id)
-            add_edge("system", svc_id, "CONTAINS")
+        static_type = str(row.get("type", "")).strip().lower()
+        static_name = str(row.get("name", "")).strip()
+        static_properties = row.get("properties", "{}")
 
-    # --- Structural nodes (Module, Structure, Operation) from runtime event codes ---
-    # Each unique event_code gives us one Operation and its containing chain.
+        if isinstance(static_properties, str):
+            static_properties = json.loads(static_properties)
+
+        if static_type == "microservice":
+            static_node_id = _define_node_id(static_name)
+            add_node(static_node_id, "Service", name=static_name)
+            add_edge("system", static_node_id, "CONTAINS")
+            static_properties_interfaces = static_properties.get("interfaces", [])
+            for interface_path in static_properties_interfaces:
+                parts = interface_path.split(".")
+                static_interface_id = _define_node_id(parts[1])
+                add_node(static_interface_id, "Module", name=parts[1])
+                add_edge(static_node_id, static_interface_id, "CONTAINS")
+                part_index = 0
+                for part in parts[1:]:
+                    previous_part_id = _define_node_id(parts[part_index])
+                    part_id = _define_node_id(part)
+
+                    add_node(part_id, _define_node_type(part), name=part)
+                    add_edge(previous_part_id, part_id, "CONTAINS")
+                    part_index += 1
+        if static_type == "package":
+            parts = _parse_static_name(static_name)
+            if (len(parts) > 0):
+                static_package_id = _define_node_id(parts[0])
+                add_node(static_package_id, "Module", name=parts[0])
+                static_properties_parent = static_properties.get("parent", "")
+                if (static_properties_parent):
+                    static_properties_parent_id = _define_node_id(static_properties_parent)
+                    add_edge(static_properties_parent_id, static_package_id, "CONTAINS")
+                part_index = 0
+                for part in parts[1:]:
+                    previous_part_id = _define_node_id(parts[part_index])
+                    part_id = _define_node_id(part)
+
+                    add_node(part_id, _define_node_type(part), name=part)
+                    add_edge(previous_part_id, part_id, "CONTAINS")
+                    part_index += 1
+        if static_type == "function":
+            function_name = static_name.split("(")[0]
+            if (len(parts) > 0):
+                add_node(function_name, "Operation", name=function_name)
+                static_properties_parent = static_properties.get("parent", "")
+                if (static_properties_parent):
+                    parent_parts = _parse_static_name(static_properties_parent)
+                    if (len(parent_parts) > 0):
+                        add_edge(_define_node_id(parent_parts[-1]), function_name, "CONTAINS")
+
+    # --- Add nodes and edges from the runtime CSV ---
+    trace_rows = {}
     for _, row in runtime_df.iterrows():
-        event_code = str(row.get("event_code", "")).strip()
-        service_name = str(row.get("service_name", "")).strip()
+        print(row)
+        runtime_service_name = str(row.get("service_name", "")).strip()
+        runtime_service_id = _define_node_id(runtime_service_name)
+        add_node(runtime_service_id, "Service", name=runtime_service_name)
+        add_edge("system", runtime_service_id, "CONTAINS", source_type="dynamic")
+        runtime_event_code = str(row.get("event_code", "")).strip()
+        parts = runtime_event_code.split(".")
+        if (len(parts) > 0):
+            runtime_event_id = _define_node_id(parts[0])
+            add_node(runtime_event_id, "Module", name=parts[0])
+            add_edge(runtime_service_id, runtime_event_id, "CONTAINS", source_type="dynamic")
+            part_index = 0
+            for part in parts[1:]:
+                previous_part_id = _define_node_id(parts[part_index])
+                part_id = _define_node_id(part)
+                
+                add_node(part_id, _define_node_type(part), name=part)
+                add_edge(previous_part_id, part_id, "CONTAINS", source_type="dynamic")
+                part_index += 1
 
-        module_path, structure_name, operation_name = _parse_event_code(event_code)
+        runtime_callee_name = str(row.get("callee", "")).strip()
+        runtime_callee_id = _define_node_id(runtime_callee_name)
+        runtime_timestamp = str(row.get("timestamp", "")).strip()
+        if runtime_timestamp:
+            runtime_timestamp = datetime.fromisoformat(runtime_timestamp).isoformat()
 
-        module_id    = f"module:{module_path}" if module_path else None
-        struct_key   = f"{module_path}.{structure_name}" if module_path else structure_name
-        structure_id = f"structure:{struct_key}" if structure_name else None
-        operation_id = f"operation:{event_code}"
+        add_node(runtime_callee_id, _define_node_type(runtime_callee_name), name=runtime_callee_name)
+        if (runtime_service_id, runtime_callee_id, "DEPENDS_ON") not in seen_edges:
+            add_edge(runtime_service_id, runtime_callee_id, "DEPENDS_ON", source_type="dynamic", call_count=1, timestamps=[runtime_timestamp])
+        else:
+            for edge in edges:
+                if edge["source"] == runtime_service_id and edge["target"] == runtime_callee_id and edge["type"] == "DEPENDS_ON":
+                    edge["call_count"] += 1
+                    edge.setdefault("timestamps", []).append(runtime_timestamp)
+                    break
 
-        if module_id:
-            add_node(module_id, "Module", name=module_path)
-        if structure_id:
-            add_node(structure_id, "Structure", name=structure_name)
-        add_node(operation_id, "Operation", name=operation_name, event_code=event_code)
+        runtime_trace_id = str(row.get("trace_id", "-")).strip()
+        trace_rows[runtime_trace_id] = trace_rows.get(runtime_trace_id, []) + [row]
 
-        # Service -CONTAINS-> Module
-        # When there is no module layer, link Service directly to Structure instead.
-        # (Component level is skipped — direct Service-to-Module links are allowed.)
-        if service_name in nodes:
-            if module_id:
-                add_edge(service_name, module_id, "CONTAINS")
-            elif structure_id:
-                add_edge(service_name, structure_id, "CONTAINS")
+    for trace_id, items in trace_rows.items():
+        items.sort(key=lambda s: s["timestamp"])
+        node_id = f"trace:{trace_id}"
+        add_node(node_id, "ExecutionTrace", name=trace_id)
+        for i, row in enumerate(items):
+            runtime_invocation_id = f"invocation:{row['timestamp']}-{row['service_name']}-{row['event_code']}"
+            runtime_timestamp = str(row.get("timestamp", "")).strip()
+            if runtime_timestamp:
+                runtime_timestamp = datetime.fromisoformat(runtime_timestamp).isoformat()
+            
+            runtime_caller_id = _define_node_id(row.get("service_name", ""))
+            runtime_callee_id = _define_node_id(row.get("callee", ""))
 
-        # Module -CONTAINS-> Structure
-        if module_id and structure_id:
-            add_edge(module_id, structure_id, "CONTAINS")
+            add_node(runtime_invocation_id, "RuntimeInvocation", name=runtime_invocation_id, timestamp=runtime_timestamp, transaction_id=row.get("transaction_id", ""), order=i, caller=runtime_caller_id, callee=runtime_callee_id)
+            add_edge(node_id, runtime_invocation_id, "CONTAINS", source_type="dynamic")
+            if i > 0:
+                previous_row = items[i - 1]
+                previous_invocation_id = f"invocation:{previous_row['timestamp']}-{previous_row['service_name']}-{previous_row['event_code']}"
+                add_edge(previous_invocation_id, runtime_invocation_id, "NEXT", source_type="dynamic")
+            runtime_event_code = row.get("event_code", "")
+            parts = runtime_event_code.split(".")
+            add_edge(runtime_invocation_id, _define_node_id(parts[-1]), "EXECUTES", source_type="dynamic", duration=row.get("call_duration", 0), frequency=row.get("call_frequency", 0))
 
-        # Structure -CONTAINS-> Operation
-        if structure_id:
-            add_edge(structure_id, operation_id, "CONTAINS")
-
-    # --- Service -DEPENDS_ON-> Service from caller/callee pairs ---
-    for _, row in runtime_df.iterrows():
-        src = str(row.get("service_name", "")).strip()
-        tgt = str(row.get("callee", "")).strip()
-        if src and tgt and tgt not in ("nan", "-", ""):
-            add_edge(src, tgt, "DEPENDS_ON", source_type="dynamic")
-
-    # --- RuntimeInvocation nodes (one per row, in original CSV order) ---
-    # All rows become RuntimeInvocation nodes regardless of whether they have a trace.
-    # The node stores every original CSV field so the DataFrame can be reconstructed later.
-    for idx, row in runtime_df.iterrows():
-        inv_id     = f"invocation:{idx}"
-        event_code = str(row.get("event_code", "")).strip()
-        raw_dur    = row.get("call_duration")
-        duration   = float(raw_dur) if pd.notna(raw_dur) else 0.0
-
-        add_node(
-            inv_id,
-            "RuntimeInvocation",
-            name=inv_id,
-            timestamp=str(row.get("timestamp", "")),
-            service_name=str(row.get("service_name", "")),
-            event_code=event_code,
-            trace_id=str(row.get("trace_id", "-")),
-            transaction_id=str(row.get("transaction_id", "")),
-            callee=str(row.get("callee", "")),
-            call_duration=duration,   # seconds — same unit as raw CSV
-        )
-
-        # Every invocation executes a specific Operation
-        operation_id = f"operation:{event_code}"
-        if operation_id in nodes:
-            add_edge(
-                inv_id, operation_id, "EXECUTES",
-                source_type="dynamic",
-                duration=duration,
-                frequency=1,
-            )
-
-    # --- ExecutionTrace nodes + CONTAINS + NEXT edges ---
-    # Group invocations by trace_id; rows with "-" have no trace.
-    trace_rows = defaultdict(list)
-    for idx, row in runtime_df.iterrows():
-        tid = str(row.get("trace_id", "-")).strip()
-        trace_rows[tid].append(idx)
-
-    for trace_id, inv_indices in trace_rows.items():
-        if trace_id == "-":
-            continue
-
-        trace_node_id = f"trace:{trace_id}"
-        add_node(trace_node_id, "ExecutionTrace", name=trace_id)
-
-        prev_inv_id = None
-        for order, idx in enumerate(inv_indices):
-            inv_id = f"invocation:{idx}"
-            add_edge(trace_node_id, inv_id, "CONTAINS", source_type="dynamic")
-            if prev_inv_id:
-                add_edge(prev_inv_id, inv_id, "NEXT", source_type="dynamic", order=order)
-            prev_inv_id = inv_id
 
     return {"nodes": list(nodes.values()), "edges": edges}
 

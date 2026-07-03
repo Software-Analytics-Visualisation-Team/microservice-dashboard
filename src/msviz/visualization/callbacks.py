@@ -1,26 +1,20 @@
 """Dash callback registrations."""
 
-import base64
-import json
-
 import pandas as pd
 from copy import deepcopy
 from dash import Input, Output, State, ctx, html
-from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
 
-from .data import _graph_to_runtime_df, _graph_to_static_dict
+from msviz.analysis.neo4j_client import Neo4jClient
+
 from .graphs import (
     build_all_event_code_histogram,
     build_edge_event_code_histogram,
     build_event_table,
-    build_overall_graph_elements,
     build_selected_edge_violinplot,
     build_service_heatmap_figure,
     build_span_elements,
-    build_static_graph_elements,
     build_trace_elements,
-    get_global_incoming_range,
 )
 
 
@@ -65,8 +59,8 @@ _REPLAY_STYLESHEET = [
     {
         "selector": "edge.edge-future",
         "style": {
-            "line-color": "#adb5bd",
-            "target-arrow-color": "#adb5bd",
+            "line-color": "#8c9197",
+            "target-arrow-color": "#8c9197",
             "width": 2,
             "opacity": 0.3,
         },
@@ -98,81 +92,47 @@ _REPLAY_STYLESHEET = [
 ]
 
 
-def _parse_store(store_data):
-    """Return (runtime_df, static_elements) from the data store."""
-    if not store_data:
-        return pd.DataFrame(), []
-    records = store_data.get("runtime_records", [])
-    df = pd.DataFrame(records)
-    if not df.empty:
-        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-        df["call_duration"] = pd.to_numeric(df["call_duration"], errors="coerce")
-    return df, store_data.get("static_elements", [])
+def _rows_to_df(rows):
+    """Return a runtime DataFrame from a list of Neo4jClient invocation rows."""
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+    df["call_duration"] = pd.to_numeric(df["call_duration"], errors="coerce") * 1000
+    return df
 
 
 def register_callbacks(app, overall_stylesheet):
 
     # ------------------------------------------------------------------ #
-    # Upload                                                             #
-    # ------------------------------------------------------------------ #
-
-    @app.callback(
-        [Output("data-store", "data"), Output("upload-status", "children")],
-        Input("graph-upload", "contents"),
-        prevent_initial_call=True,
-    )
-    def handle_graph_upload(contents):
-        if not contents:
-            raise PreventUpdate
-        _, content_string = contents.split(",", 1)
-        graph = json.loads(base64.b64decode(content_string))
-        runtime_df = _graph_to_runtime_df(graph)
-        static_dict = _graph_to_static_dict(graph)
-        static_elems = build_static_graph_elements(static_dict)
-        store_data = {
-            "runtime_records": runtime_df.assign(
-                timestamp=runtime_df["timestamp"].astype(str)
-            ).to_dict("records"),
-            "static_elements": static_elems,
-            "service_names": sorted(runtime_df["service_name"].dropna().unique().tolist()),
-            "trace_ids": runtime_df["trace_id"].dropna().unique().tolist(),
-            "static_services": static_dict.get("static_services", {}),
-            "static_packages": static_dict.get("packages", {}),
-            "static_functions": static_dict.get("functions", {}),
-        }
-        n_nodes = len(graph.get("nodes", []))
-        n_edges = len(graph.get("edges", []))
-        return store_data, f"✓ {n_nodes} nodes, {n_edges} edges"
-
-    # ------------------------------------------------------------------ #
-    # Dropdown population (re-runs on upload via data-store change)      #
+    # Dropdown population                                                #
     # ------------------------------------------------------------------ #
 
     @app.callback(
         [
-            Output("trace-id-dropdown", "options"), 
+            Output("trace-id-dropdown", "options"),
             Output("trace-id-dropdown", "value")
         ],
-        Input("data-store", "data"),
+        Input("time-range-slider", "value")
     )
-    def update_trace_dropdown(store_data):
-        if not store_data:
-            return [], None
-        trace_ids = store_data.get("trace_ids", [])
-        options = [
-            {"label": (f"{str(t)[:8]}..." if len(str(t)) > 8 else str(t)), "value": t}
-            for t in trace_ids
-        ]
-        return options, (trace_ids[0] if trace_ids else None)
+    def update_trace_dropdown(time_range):
+        start_dt = pd.to_datetime(time_range[0], unit="s")
+        end_dt = pd.to_datetime(time_range[1], unit="s")
+
+        data = Neo4jClient.retrieve_trace_ids(start_dt, end_dt)
+
+        elements = [{"label": (f"{str(trace_id)[:8]}..." if len(str(trace_id)) > 8 else str(trace_id)), "value": trace_id} for trace_id in data]
+        return elements, "-"
 
     @app.callback(
         [Output("service-name-dropdown", "options"), Output("service-name-dropdown", "value")],
-        Input("data-store", "data"),
+        Input("time-range-slider", "value"),
     )
-    def update_service_dropdown(store_data):
-        if not store_data:
-            return [], None
-        service_names = store_data.get("service_names", [])
+    def update_service_dropdown(time_range):
+        start_dt = pd.to_datetime(time_range[0], unit="s")
+        end_dt = pd.to_datetime(time_range[1], unit="s")
+
+        service_names = Neo4jClient.retrieve_service_names(start_dt, end_dt)
         options = [{"label": s, "value": s} for s in service_names]
         return options, (service_names[0] if service_names else None)
 
@@ -237,24 +197,20 @@ def register_callbacks(app, overall_stylesheet):
             Input("trace-id-dropdown", "value"),
             Input("time-range-slider", "value"),
             Input("main-tabs", "value"),
-            Input("data-store", "data"),
         ],
     )
-    def update_dashboard(selected_trace_id, time_range, _active_tab, store_data):
-        runtime_data, _ = _parse_store(store_data)
-        if runtime_data.empty:
-            return [], "No data loaded."
-
-        start_dt = pd.to_datetime(time_range[0], unit="s")
-        end_dt = pd.to_datetime(time_range[1], unit="s")
-        filtered_data = runtime_data[
-            (runtime_data["timestamp"] >= start_dt) & (runtime_data["timestamp"] <= end_dt)
-        ]
-
+    def update_dashboard(selected_trace_id, time_range, _active_tab):
         if not selected_trace_id or selected_trace_id == "-":
             return [], "No trace_id selected."
 
-        df = filtered_data[filtered_data["trace_id"] == selected_trace_id]
+        start_dt = pd.to_datetime(time_range[0], unit="s")
+        end_dt = pd.to_datetime(time_range[1], unit="s")
+
+        rows = Neo4jClient.retrieve_trace_invocations(selected_trace_id, start_dt, end_dt)
+        df = _rows_to_df(rows)
+        if df.empty:
+            return [], "No data for selected trace."
+
         return build_trace_elements(df), build_event_table(df)
 
     # ------------------------------------------------------------------ #
@@ -266,28 +222,47 @@ def register_callbacks(app, overall_stylesheet):
         [
             Input("trace-id-dropdown", "value"),
             Input("time-range-slider", "value"),
-            Input("main-tabs", "value"),
-            Input("data-store", "data"),
+            Input("main-tabs", "value")
         ],
     )
-    def update_overall_graph(selected_trace_id, time_range, _active_tab, store_data):
-        runtime_data, static_elements = _parse_store(store_data)
-        if runtime_data.empty:
-            return []
-
+    def update_overall_graph(selected_trace_id, time_range, _active_tab):
         start_dt = pd.to_datetime(time_range[0], unit="s")
         end_dt = pd.to_datetime(time_range[1], unit="s")
-        filtered_data = runtime_data[
-            (runtime_data["timestamp"] >= start_dt) & (runtime_data["timestamp"] <= end_dt)
-        ]
-        global_min_count, global_max_count = get_global_incoming_range(runtime_data)
-        return build_overall_graph_elements(
-            filtered_data,
-            global_min_count,
-            global_max_count,
-            selected_trace_id,
-            static_elements,
-        )
+        
+        data = Neo4jClient.retrieve_full_dependency_graph(start_dt, end_dt)
+        
+        elements = []
+        for service in data['nodes']:
+            is_parent = service["properties"]["moduleCount"] > 0
+            hex_color = "#5bc0de" if is_parent else "#f0ad4e"
+
+            elements.append({
+                'data': {
+                    'id': service['id'],
+                    'label': service['name'],
+                },
+                'style': {
+                    'background-color': hex_color,
+                    'shape': 'rectangle' if is_parent else 'circle'
+                }
+            })
+        
+        for edge in data['edges']:
+            edge_props = edge.get('properties', {})
+
+            classes = 'flow' if edge['source_type'] == 'dynamic' else 'static-edge'
+            classes += ' selected' if edge_props.get('trace_ids') and selected_trace_id in edge_props.get('trace_ids', []) else ''
+            
+            elements.append({
+                'data': {
+                    'source': edge['source'],
+                    'target': edge['target'],
+                    'label': f"Calls: {edge_props.get('call_count', 0)}"
+                },
+                'classes': classes
+            })
+
+        return elements
 
     # ------------------------------------------------------------------ #
     # Graph: Span                                                        #
@@ -296,22 +271,18 @@ def register_callbacks(app, overall_stylesheet):
     @app.callback(
         Output("span-id-dropdown", "options"),
         Input("trace-id-dropdown", "value"),
-        State("data-store", "data"),
     )
-    def update_span_id_dropdown(selected_trace_id, store_data):
+    def update_span_id_dropdown(selected_trace_id):
         if not selected_trace_id or selected_trace_id == "-":
             return []
-        runtime_data, _ = _parse_store(store_data)
-        if runtime_data.empty:
-            return []
-        filtered_df = runtime_data[runtime_data["trace_id"] == selected_trace_id]
-        span_ids = filtered_df["transaction_id"].dropna().unique()
+        span_ids = Neo4jClient.retrieve_span_ids(selected_trace_id)
         return [
             {
                 "label": (f"{str(s)[:12]}..." if len(str(s)) > 12 else str(s)),
                 "value": s,
             }
             for s in span_ids
+            if s
         ]
 
     @app.callback(
@@ -321,24 +292,16 @@ def register_callbacks(app, overall_stylesheet):
             Output("span-event-table", "children"),
         ],
         [Input("span-id-dropdown", "value"), Input("time-range-slider", "value")],
-        State("data-store", "data"),
     )
-    def update_span_graph(selected_span_id, time_range, store_data):
+    def update_span_graph(selected_span_id, time_range):
         if not selected_span_id:
             return [], overall_stylesheet, "No span_id selected."
 
-        runtime_data, _ = _parse_store(store_data)
-        if runtime_data.empty:
-            return [], overall_stylesheet, "No data loaded."
-
         start_dt = pd.to_datetime(time_range[0], unit="s")
         end_dt = pd.to_datetime(time_range[1], unit="s")
-        df = runtime_data[
-            (runtime_data["transaction_id"] == selected_span_id)
-            & (runtime_data["timestamp"] >= start_dt)
-            & (runtime_data["timestamp"] <= end_dt)
-        ].copy()
 
+        rows = Neo4jClient.retrieve_span_invocations(selected_span_id, start_dt, end_dt)
+        df = _rows_to_df(rows)
         if df.empty:
             return [], overall_stylesheet, "No runtime_data for selected span."
 
@@ -351,18 +314,18 @@ def register_callbacks(app, overall_stylesheet):
     @app.callback(
         Output("heatmap-graph", "figure"),
         [Input("service-name-dropdown", "value"), Input("time-range-slider", "value")],
-        State("data-store", "data"),
     )
-    def update_heatmap(selected_service, time_range, store_data):
-        runtime_data, _ = _parse_store(store_data)
-        if runtime_data.empty:
+    def update_heatmap(selected_service, time_range):
+        if not selected_service:
             return {}
         start_dt = pd.to_datetime(time_range[0], unit="s")
         end_dt = pd.to_datetime(time_range[1], unit="s")
-        filtered_data = runtime_data[
-            (runtime_data["timestamp"] >= start_dt) & (runtime_data["timestamp"] <= end_dt)
-        ]
-        return build_service_heatmap_figure(filtered_data, selected_service)
+
+        rows = Neo4jClient.retrieve_service_invocations(selected_service, start_dt, end_dt)
+        df = _rows_to_df(rows)
+        if df.empty:
+            return {}
+        return build_service_heatmap_figure(df, selected_service)
 
     # ------------------------------------------------------------------ #
     # Histograms                                                         #
@@ -370,12 +333,17 @@ def register_callbacks(app, overall_stylesheet):
 
     @app.callback(
         Output("event-code-histogram", "figure"),
-        Input("overall-cytoscape-graph", "tapEdgeData"),
-        State("data-store", "data"),
+        [Input("time-range-slider", "value"), Input("main-tabs", "value")],
     )
-    def update_event_code_histogram(_edge_data, store_data):
-        runtime_data, _ = _parse_store(store_data)
-        return build_all_event_code_histogram(runtime_data)
+    def update_event_code_histogram(time_range, _active_tab):
+        start_dt = pd.to_datetime(time_range[0], unit="s")
+        end_dt = pd.to_datetime(time_range[1], unit="s")
+
+        rows = Neo4jClient.retrieve_all_invocations(start_dt, end_dt)
+        df = _rows_to_df(rows)
+        if df.empty:
+            return {}
+        return build_all_event_code_histogram(df)
 
     @app.callback(
         [
@@ -383,17 +351,23 @@ def register_callbacks(app, overall_stylesheet):
             Output("edge-eventcode-histogram", "figure"),
         ],
         [Input("overall-cytoscape-graph", "tapEdgeData")],
-        [State("edge-histogram-modal", "is_open"), State("data-store", "data")],
+        [State("edge-histogram-modal", "is_open"), State("time-range-slider", "value")],
     )
-    def show_edge_histogram(edge_data, is_open, store_data):
+    def show_edge_histogram(edge_data, is_open, time_range):
         _ = is_open
         if edge_data:
-            runtime_data, _ = _parse_store(store_data)
-            source = edge_data["source"]
-            target = edge_data["target"]
-            fig = build_edge_event_code_histogram(runtime_data, source, target)
-            if isinstance(fig, dict) and fig:
-                return True, fig
+            start_dt = pd.to_datetime(time_range[0], unit="s")
+            end_dt = pd.to_datetime(time_range[1], unit="s")
+            rows = Neo4jClient.retrieve_invocations_between_services(
+                edge_data["source"], edge_data["target"], start_dt, end_dt
+            )
+            df = _rows_to_df(rows)
+            if not df.empty:
+                source_name = df["service_name"].iloc[0]
+                target_name = df["callee"].iloc[0]
+                fig = build_edge_event_code_histogram(df, source_name, target_name)
+                if not isinstance(fig, dict):
+                    return True, fig
         return False, {}
 
     @app.callback(
@@ -404,51 +378,34 @@ def register_callbacks(app, overall_stylesheet):
             Output("service-hierarchy-panel", "children"),
         ],
         Input("overall-cytoscape-graph", "tapNodeData"),
-        State("data-store", "data"),
+        State("time-range-slider", "value"),
         prevent_initial_call=True,
     )
-    def show_service_detail(node_data, store_data):
-        from collections import defaultdict
-        if not node_data or not store_data:
+    def show_service_detail(node_data, time_range):
+        if not node_data:
             return False, "", [], []
 
-        service = node_data["id"]
-        runtime_data, _ = _parse_store(store_data)
-        static_services = store_data.get("static_services", {})
-        packages = store_data.get("static_packages", {})
-        functions = store_data.get("static_functions", {})
+        service_id = node_data["id"]
+        service_name = node_data.get("label", service_id)
+        start_dt = pd.to_datetime(time_range[0], unit="s")
+        end_dt = pd.to_datetime(time_range[1], unit="s")
+        detail = Neo4jClient.retrieve_service_detail(service_id, start_dt, end_dt)
 
         # ── Info panel ──────────────────────────────────────────────────
-        outgoing = int((runtime_data["service_name"] == service).sum())
-        incoming = int((runtime_data["callee"] == service).sum())
-        deps = static_services.get(service, {}).get("dependencies", [])
-
+        deps = detail["dependencies"]
         info = [
-            html.H5(service, className="mb-3"),
-            html.P([html.Strong("Outgoing calls: "), str(outgoing)]),
-            html.P([html.Strong("Incoming calls: "), str(incoming)]),
+            html.H5(service_name, className="mb-3"),
+            html.P([html.Strong("Outgoing calls: "), str(detail["outgoing"])]),
+            html.P([html.Strong("Incoming calls: "), str(detail["incoming"])]),
             html.P(html.Strong("Static dependencies:")),
             html.Ul([html.Li(d) for d in deps]) if deps else html.P("None", className="text-muted"),
         ]
 
         # ── Hierarchy panel ──────────────────────────────────────────────
-        # Packages owned by this service
-        my_packages = sorted(pkg for pkg, v in packages.items() if v.get("parent") == service)
-
         accordion_items = []
-        for pkg in my_packages:
-            # Functions whose event_code falls under this package
-            pkg_functions = {ec: v for ec, v in functions.items() if ec.startswith(pkg + ".")}
-
-            # Group by interface/structure (the parent field on each function)
-            by_structure = defaultdict(list)
-            for ec, v in pkg_functions.items():
-                struct = v.get("parent") or "—"
-                fn_name = ec.split(".")[-1]
-                by_structure[struct].append(fn_name)
-
+        for module, structures in sorted(detail["hierarchy"].items()):
             structure_rows = []
-            for struct, fns in sorted(by_structure.items()):
+            for struct, fns in sorted(structures.items()):
                 structure_rows.append(
                     html.Li([
                         html.Strong(struct),
@@ -459,7 +416,7 @@ def register_callbacks(app, overall_stylesheet):
             accordion_items.append(
                 dbc.AccordionItem(
                     html.Ul(structure_rows) if structure_rows else html.P("No interfaces found.", className="text-muted"),
-                    title=pkg,
+                    title=module,
                 )
             )
 
@@ -469,7 +426,7 @@ def register_callbacks(app, overall_stylesheet):
             else html.P("No static package data available for this service.", className="text-muted")
         )
 
-        return True, service, info, hierarchy
+        return True, service_name, info, hierarchy
 
     @app.callback(
         [Output("selected-edge-modal", "is_open"), Output("selected-edge-violinplot", "figure")],
@@ -478,27 +435,23 @@ def register_callbacks(app, overall_stylesheet):
             State("selected-edge-modal", "is_open"),
             State("trace-id-dropdown", "value"),
             State("time-range-slider", "value"),
-            State("data-store", "data"),
         ],
     )
-    def show_selected_edge_violinplot(edge_data, is_open, selected_trace_id, time_range, store_data):
+    def show_selected_edge_violinplot(edge_data, is_open, selected_trace_id, time_range):
         _ = is_open
         if edge_data and selected_trace_id:
-            runtime_data, _ = _parse_store(store_data)
             source = edge_data["source"]
             target = edge_data["target"]
             start_dt = pd.to_datetime(time_range[0], unit="s")
             end_dt = pd.to_datetime(time_range[1], unit="s")
-            filtered_df = runtime_data[
-                (runtime_data["trace_id"] == selected_trace_id)
-                & (runtime_data["service_name"] == source)
-                & (runtime_data["callee"] == target)
-                & (runtime_data["timestamp"] >= start_dt)
-                & (runtime_data["timestamp"] <= end_dt)
-            ]
-            fig = build_selected_edge_violinplot(filtered_df, source, target)
-            if isinstance(fig, dict) and fig:
-                return True, fig
+            rows = Neo4jClient.retrieve_trace_edge_invocations(
+                selected_trace_id, source, target, start_dt, end_dt
+            )
+            df = _rows_to_df(rows)
+            if not df.empty:
+                fig = build_selected_edge_violinplot(df, source, target)
+                if not isinstance(fig, dict):
+                    return True, fig
         return False, {}
 
     # ------------------------------------------------------------------ #
@@ -517,15 +470,14 @@ def register_callbacks(app, overall_stylesheet):
         ],
         [
             Input("trace-id-dropdown", "value"),
-            Input("data-store", "data"),
         ],
         prevent_initial_call=True,
     )
-    def reset_replay_on_trace_change(trace_id, store_data):
-        runtime_data, _ = _parse_store(store_data)
-        N = 0
-        if not runtime_data.empty and trace_id:
-            N = len(runtime_data[runtime_data["trace_id"] == trace_id])
+    def reset_replay_on_trace_change(trace_id):
+        data = Neo4jClient.retrieve_call_graph_for_trace(trace_id)
+        edges = data["edges"]
+
+        N = len(edges) if edges else 0
         max_step = max(N - 1, 0)
         marks = {0: "1", max_step: str(N)} if N > 0 else {0: "0"}
         return 0, 0, max_step, marks, 0, True, "Play"
@@ -547,17 +499,16 @@ def register_callbacks(app, overall_stylesheet):
             State("replay-step", "data"),
             State("replay-interval", "disabled"),
             State("trace-id-dropdown", "value"),
-            State("data-store", "data"),
         ],
         prevent_initial_call=True,
     )
-    def handle_replay_controls(_prev, _next, _play, _n_intervals, slider_val, current_step, interval_disabled, trace_id, store_data):
+    def handle_replay_controls(_prev, _next, _play, _n_intervals, slider_val, current_step, interval_disabled, trace_id):
         triggered = ctx.triggered_id
 
-        runtime_data, _ = _parse_store(store_data)
-        N = 0
-        if not runtime_data.empty and trace_id:
-            N = len(runtime_data[runtime_data["trace_id"] == trace_id])
+        data = Neo4jClient.retrieve_call_graph_for_trace(trace_id)
+        edges = data["edges"]
+
+        N = len(edges) if edges else 0
 
         step = current_step if current_step is not None else 0
         disabled = interval_disabled if interval_disabled is not None else True
@@ -593,57 +544,60 @@ def register_callbacks(app, overall_stylesheet):
             Input("replay-step", "data"),
             Input("trace-id-dropdown", "value"),
         ],
-        State("data-store", "data"),
         prevent_initial_call=True,
     )
-    def render_replay_graph(step, trace_id, store_data):
-        runtime_data, _ = _parse_store(store_data)
+    def render_replay_graph(step, trace_id):
+        data = Neo4jClient.retrieve_call_graph_for_trace(trace_id)
+        nodes = data["nodes"]
+        edges = data["edges"]
 
-        if runtime_data.empty or not trace_id or trace_id == "-":
+        if not trace_id or trace_id == "-":
             return [], _REPLAY_STYLESHEET, "No trace selected", ""
 
-        df = (
-            runtime_data[runtime_data["trace_id"] == trace_id]
-            .sort_values("timestamp")
-            .reset_index(drop=True)
-        )
-
-        if df.empty:
+        if len(nodes) == 0 or len(edges) == 0:
             return [], _REPLAY_STYLESHEET, "No calls for this trace", ""
 
-        N = len(df)
+        cy_nodes = []
+        for node in nodes:
+            cy_nodes.append({
+                "data": {
+                    "id": node["id"],
+                    "label": node["name"],
+                },
+                "classes": "node",
+            })
+
+        N = len(edges)
         step = min(step or 0, N - 1)
 
-        services = set(df["service_name"].dropna()) | set(df["callee"].dropna())
-        cy_nodes = [{"data": {"id": s, "label": s}} for s in services]
-
+        active_edge = None
         cy_edges = []
-        for i, row in df.iterrows():
+        for i, edge in enumerate(edges):
+            print(i, edge, step)
             if i < step:
                 cls = "edge-completed"
             elif i == step:
+                active_edge = edge
                 cls = "edge-active"
             else:
                 cls = "edge-future"
-            short_fn = row["event_code"].split(".")[-1] if pd.notna(row.get("event_code")) else ""
             cy_edges.append({
                 "data": {
                     "id": f"replay-edge-{i}",
-                    "source": row["service_name"],
-                    "target": row["callee"],
-                    "label": short_fn,
+                    "source": edge["source"],
+                    "target": edge["target"],
+                    "label": edge["label"],
                 },
                 "classes": cls,
             })
 
-        row = df.iloc[step]
-        duration_str = f"{row['call_duration']:.1f}ms" if pd.notna(row.get("call_duration")) else "N/A"
-        ts_str = str(row["timestamp"])[:19] if pd.notna(row.get("timestamp")) else "N/A"
+        duration_str = f"{active_edge['properties']['duration']:.1f}ms" if active_edge and pd.notna(active_edge['properties'].get("duration")) else "N/A"
+        ts_str = str(active_edge['properties']['timestamp'])[:19] if active_edge and pd.notna(active_edge['properties'].get("timestamp")) else "N/A"
         info_panel = dbc.Card(
             dbc.CardBody([
-                html.H6(f"{row['service_name']} → {row['callee']}", className="card-title mb-1"),
+                html.H6(f"{active_edge['source']} -> {active_edge['target']}", className="card-title mb-1"),
                 html.Code(
-                    str(row.get("event_code", "")),
+                    str(active_edge['label']),
                     style={"fontSize": "12px", "display": "block", "marginBottom": "4px"},
                 ),
                 html.Small(f"Time: {ts_str}  |  Duration: {duration_str}", className="text-muted"),
@@ -651,4 +605,5 @@ def register_callbacks(app, overall_stylesheet):
             style={"marginTop": "10px"},
         )
 
+        print(nodes, trace_id)
         return cy_nodes + cy_edges, _REPLAY_STYLESHEET, f"Step {step + 1} / {N}", info_panel
