@@ -104,6 +104,24 @@ def build_graph(runtime_csv: str | Path, static_csv: str | Path) -> dict:
                 **props,
             })
 
+    def add_hierarchy_edge(source, target, service_name):
+        """Add/extend a static CONTAINS edge, tagging it with the service(s) that
+        declared it so a service's hierarchy view only shows its own branches,
+        not every other service's branches through a shared package/interface."""
+        if not service_name:
+            add_edge(source, target, "CONTAINS")
+            return
+        key = (source, target, "CONTAINS")
+        if key not in seen_edges:
+            add_edge(source, target, "CONTAINS", services=[service_name])
+        else:
+            for edge in edges:
+                if edge["source"] == source and edge["target"] == target and edge["type"] == "CONTAINS":
+                    services = edge.setdefault("services", [])
+                    if service_name not in services:
+                        services.append(service_name)
+                    break
+
     # --- One System node that owns all services ---
     add_node("system", "System", name="system")
 
@@ -126,14 +144,14 @@ def build_graph(runtime_csv: str | Path, static_csv: str | Path) -> dict:
                 parts = interface_path.split(".")
                 static_top_package_id = _define_node_id(parts[0])
                 add_node(static_top_package_id, "Module", name=parts[0])
-                add_edge(static_node_id, static_top_package_id, "CONTAINS")
+                add_hierarchy_edge(static_node_id, static_top_package_id, static_node_id)
                 part_index = 0
                 for part in parts[1:]:
                     previous_part_id = _define_node_id(parts[part_index])
                     part_id = _define_node_id(part)
 
                     add_node(part_id, _define_node_type(part), name=part)
-                    add_edge(previous_part_id, part_id, "CONTAINS")
+                    add_hierarchy_edge(previous_part_id, part_id, static_node_id)
                     part_index += 1
         if static_type == "package":
             parts = _parse_static_name(static_name)
@@ -141,16 +159,17 @@ def build_graph(runtime_csv: str | Path, static_csv: str | Path) -> dict:
                 static_package_id = _define_node_id(parts[0])
                 add_node(static_package_id, "Module", name=parts[0])
                 static_properties_parent = static_properties.get("parent", "")
+                static_properties_parent_id = ""
                 if (static_properties_parent):
                     static_properties_parent_id = _define_node_id(static_properties_parent)
-                    add_edge(static_properties_parent_id, static_package_id, "CONTAINS")
+                    add_hierarchy_edge(static_properties_parent_id, static_package_id, static_properties_parent_id)
                 part_index = 0
                 for part in parts[1:]:
                     previous_part_id = _define_node_id(parts[part_index])
                     part_id = _define_node_id(part)
 
                     add_node(part_id, _define_node_type(part), name=part)
-                    add_edge(previous_part_id, part_id, "CONTAINS")
+                    add_hierarchy_edge(previous_part_id, part_id, static_properties_parent_id)
                     part_index += 1
         if static_type == "function":
             function_name = static_name.split("(")[0]

@@ -13,6 +13,7 @@ from .graphs import (
     build_event_table,
     build_selected_edge_violinplot,
     build_service_heatmap_figure,
+    build_service_hierarchy_panel,
     build_span_elements,
     build_trace_elements,
 )
@@ -402,29 +403,7 @@ def register_callbacks(app, overall_stylesheet):
         ]
 
         # ── Hierarchy panel ──────────────────────────────────────────────
-        accordion_items = []
-        for module, structures in sorted(detail["hierarchy"].items()):
-            structure_rows = []
-            for struct, fns in sorted(structures.items()):
-                structure_rows.append(
-                    html.Li([
-                        html.Strong(struct),
-                        html.Ul([html.Li(fn, style={"fontFamily": "monospace", "fontSize": "12px"}) for fn in sorted(fns)]),
-                    ])
-                )
-
-            accordion_items.append(
-                dbc.AccordionItem(
-                    html.Ul(structure_rows) if structure_rows else html.P("No interfaces found.", className="text-muted"),
-                    title=module,
-                )
-            )
-
-        hierarchy = (
-            dbc.Accordion(accordion_items, start_collapsed=True, always_open=True)
-            if accordion_items
-            else html.P("No static package data available for this service.", className="text-muted")
-        )
+        hierarchy = build_service_hierarchy_panel(detail["hierarchy"])
 
         return True, service_name, info, hierarchy
 

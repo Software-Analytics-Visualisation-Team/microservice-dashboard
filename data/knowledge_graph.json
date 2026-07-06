@@ -13,6 +13,12 @@
       "name": "service_1"
     },
     {
+      "id": "module:package_3",
+      "label": "Module",
+      "color": "#9b59b6",
+      "name": "package_3"
+    },
+    {
       "id": "module:package_15",
       "label": "Module",
       "color": "#9b59b6",
@@ -43,9 +49,15 @@
       "name": "service_2"
     },
     {
-      "id": "structure:interface_37",
+      "id": "module:package_17",
       "label": "Module",
       "color": "#9b59b6",
+      "name": "package_17"
+    },
+    {
+      "id": "structure:interface_37",
+      "label": "Structure",
+      "color": "#e74c3c",
       "name": "interface_37"
     },
     {
@@ -97,6 +109,12 @@
       "name": "service_5"
     },
     {
+      "id": "module:package_19",
+      "label": "Module",
+      "color": "#9b59b6",
+      "name": "package_19"
+    },
+    {
       "id": "module:package_20",
       "label": "Module",
       "color": "#9b59b6",
@@ -121,9 +139,15 @@
       "name": "service_6"
     },
     {
-      "id": "structure:interface_41",
+      "id": "module:package_22",
       "label": "Module",
       "color": "#9b59b6",
+      "name": "package_22"
+    },
+    {
+      "id": "structure:interface_41",
+      "label": "Structure",
+      "color": "#e74c3c",
       "name": "interface_41"
     },
     {
@@ -164,8 +188,8 @@
     },
     {
       "id": "structure:interface_7",
-      "label": "Module",
-      "color": "#9b59b6",
+      "label": "Structure",
+      "color": "#e74c3c",
       "name": "interface_7"
     },
     {
@@ -185,12 +209,6 @@
       "label": "Service",
       "color": "#7bc67e",
       "name": "service_11"
-    },
-    {
-      "id": "module:package_17",
-      "label": "Module",
-      "color": "#9b59b6",
-      "name": "package_17"
     },
     {
       "id": "structure:interface_44",
@@ -278,20 +296,20 @@
     },
     {
       "id": "structure:interface_27",
-      "label": "Module",
-      "color": "#9b59b6",
+      "label": "Structure",
+      "color": "#e74c3c",
       "name": "interface_27"
     },
     {
       "id": "structure:interface_2",
-      "label": "Module",
-      "color": "#9b59b6",
+      "label": "Structure",
+      "color": "#e74c3c",
       "name": "interface_2"
     },
     {
       "id": "structure:interface_53",
-      "label": "Module",
-      "color": "#9b59b6",
+      "label": "Structure",
+      "color": "#e74c3c",
       "name": "interface_53"
     },
     {
@@ -317,6 +335,12 @@
       "label": "Service",
       "color": "#7bc67e",
       "name": "service_18"
+    },
+    {
+      "id": "module:package_1",
+      "label": "Module",
+      "color": "#9b59b6",
+      "name": "package_1"
     },
     {
       "id": "module:package_2",
@@ -391,28 +415,28 @@
       "name": "service_24"
     },
     {
-      "id": "structure:interface_57",
+      "id": "module:package_23",
       "label": "Module",
       "color": "#9b59b6",
+      "name": "package_23"
+    },
+    {
+      "id": "structure:interface_57",
+      "label": "Structure",
+      "color": "#e74c3c",
       "name": "interface_57"
     },
     {
       "id": "structure:interface_58",
-      "label": "Module",
-      "color": "#9b59b6",
+      "label": "Structure",
+      "color": "#e74c3c",
       "name": "interface_58"
     },
     {
       "id": "structure:interface_59",
-      "label": "Module",
-      "color": "#9b59b6",
+      "label": "Structure",
+      "color": "#e74c3c",
       "name": "interface_59"
-    },
-    {
-      "id": "module:package_3",
-      "label": "Module",
-      "color": "#9b59b6",
-      "name": "package_3"
     },
     {
       "id": "module:package_24",
@@ -989,12 +1013,6 @@
       "label": "Operation",
       "color": "#1abc9c",
       "name": "function_151"
-    },
-    {
-      "id": "module:package_1",
-      "label": "Module",
-      "color": "#9b59b6",
-      "name": "package_1"
     },
     {
       "id": "structure:interface_1",
@@ -25595,7 +25613,7 @@
     },
     {
       "source": "service:service_1",
-      "target": "module:package_15",
+      "target": "module:package_3",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -25608,12 +25626,6 @@
     {
       "source": "module:package_15",
       "target": "structure:interface_35",
-      "type": "CONTAINS",
-      "source_type": "static"
-    },
-    {
-      "source": "service:service_1",
-      "target": "module:package_16",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -25637,7 +25649,7 @@
     },
     {
       "source": "service:service_2",
-      "target": "structure:interface_37",
+      "target": "module:package_17",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -25655,7 +25667,7 @@
     },
     {
       "source": "service:service_3",
-      "target": "module:package_4",
+      "target": "module:package_3",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -25680,12 +25692,6 @@
     {
       "source": "module:package_4",
       "target": "structure:interface_39",
-      "type": "CONTAINS",
-      "source_type": "static"
-    },
-    {
-      "source": "service:service_3",
-      "target": "module:package_18",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -25715,7 +25721,7 @@
     },
     {
       "source": "service:service_5",
-      "target": "module:package_20",
+      "target": "module:package_19",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -25745,7 +25751,7 @@
     },
     {
       "source": "service:service_6",
-      "target": "structure:interface_41",
+      "target": "module:package_22",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -25763,7 +25769,7 @@
     },
     {
       "source": "service:service_7",
-      "target": "module:package_10",
+      "target": "module:package_3",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -25793,7 +25799,7 @@
     },
     {
       "source": "service:service_8",
-      "target": "module:package_10",
+      "target": "module:package_3",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -25805,19 +25811,13 @@
     },
     {
       "source": "service:service_9",
-      "target": "structure:interface_7",
+      "target": "module:package_3",
       "type": "CONTAINS",
       "source_type": "static"
     },
     {
       "source": "module:package_3",
       "target": "structure:interface_7",
-      "type": "CONTAINS",
-      "source_type": "static"
-    },
-    {
-      "source": "service:service_9",
-      "target": "module:package_5",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -25847,7 +25847,7 @@
     },
     {
       "source": "service:service_11",
-      "target": "module:package_17",
+      "target": "module:package_3",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -25895,7 +25895,7 @@
     },
     {
       "source": "service:service_12",
-      "target": "module:package_17",
+      "target": "module:package_3",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -25925,7 +25925,7 @@
     },
     {
       "source": "service:service_13",
-      "target": "module:package_11",
+      "target": "module:package_3",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -25955,7 +25955,7 @@
     },
     {
       "source": "service:service_14",
-      "target": "structure:interface_27",
+      "target": "module:package_3",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -25966,20 +25966,8 @@
       "source_type": "static"
     },
     {
-      "source": "service:service_14",
-      "target": "structure:interface_2",
-      "type": "CONTAINS",
-      "source_type": "static"
-    },
-    {
       "source": "module:package_3",
       "target": "structure:interface_2",
-      "type": "CONTAINS",
-      "source_type": "static"
-    },
-    {
-      "source": "service:service_14",
-      "target": "structure:interface_53",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -25997,7 +25985,7 @@
     },
     {
       "source": "service:service_15",
-      "target": "structure:interface_37",
+      "target": "module:package_17",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -26009,7 +25997,7 @@
     },
     {
       "source": "service:service_16",
-      "target": "module:package_17",
+      "target": "module:package_3",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -26021,7 +26009,7 @@
     },
     {
       "source": "service:service_17",
-      "target": "module:package_17",
+      "target": "module:package_3",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -26033,7 +26021,7 @@
     },
     {
       "source": "service:service_18",
-      "target": "module:package_2",
+      "target": "module:package_1",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -26057,7 +26045,7 @@
     },
     {
       "source": "service:service_19",
-      "target": "module:package_2",
+      "target": "module:package_1",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -26081,7 +26069,7 @@
     },
     {
       "source": "service:service_22",
-      "target": "module:package_6",
+      "target": "module:package_3",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -26135,7 +26123,7 @@
     },
     {
       "source": "service:service_23",
-      "target": "module:package_6",
+      "target": "module:package_3",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -26171,7 +26159,7 @@
     },
     {
       "source": "service:service_24",
-      "target": "structure:interface_57",
+      "target": "module:package_23",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -26182,20 +26170,8 @@
       "source_type": "static"
     },
     {
-      "source": "service:service_24",
-      "target": "structure:interface_58",
-      "type": "CONTAINS",
-      "source_type": "static"
-    },
-    {
       "source": "module:package_23",
       "target": "structure:interface_58",
-      "type": "CONTAINS",
-      "source_type": "static"
-    },
-    {
-      "source": "service:service_24",
-      "target": "structure:interface_59",
       "type": "CONTAINS",
       "source_type": "static"
     },
@@ -27486,12 +27462,6 @@
       "source_type": "dynamic"
     },
     {
-      "source": "service:service_14",
-      "target": "module:package_3",
-      "type": "CONTAINS",
-      "source_type": "dynamic"
-    },
-    {
       "source": "module:package_13",
       "target": "structure:interface_28",
       "type": "CONTAINS",
@@ -27553,12 +27523,6 @@
     {
       "source": "structure:interface_33",
       "target": "operation:function_75",
-      "type": "CONTAINS",
-      "source_type": "dynamic"
-    },
-    {
-      "source": "service:service_7",
-      "target": "module:package_3",
       "type": "CONTAINS",
       "source_type": "dynamic"
     },
@@ -27669,12 +27633,6 @@
     {
       "source": "structure:interface_5",
       "target": "operation:function_3",
-      "type": "CONTAINS",
-      "source_type": "dynamic"
-    },
-    {
-      "source": "service:service_9",
-      "target": "module:package_3",
       "type": "CONTAINS",
       "source_type": "dynamic"
     },
@@ -29639,12 +29597,6 @@
     {
       "source": "structure:interface_7",
       "target": "operation:function_38",
-      "type": "CONTAINS",
-      "source_type": "dynamic"
-    },
-    {
-      "source": "service:service_23",
-      "target": "module:package_3",
       "type": "CONTAINS",
       "source_type": "dynamic"
     },

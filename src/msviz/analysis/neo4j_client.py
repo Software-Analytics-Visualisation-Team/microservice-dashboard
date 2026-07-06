@@ -104,7 +104,7 @@ class Neo4jClient:
         """Retrieve the full dependency graph from Neo4j as a knowledge graph dict."""
         cypher = """
             MATCH (s:Service)
-            OPTIONAL MATCH (s)-[:CONTAINS]->(m:Module)
+            OPTIONAL MATCH (s)-[:CONTAINS {source_type: 'static'}]->(m:Module)
             WITH s, count(m) AS moduleCount
 
             OPTIONAL MATCH (s)-[r:DEPENDS_ON]->(dep:Service)
@@ -422,17 +422,17 @@ class Neo4jClient:
         dependencies = [record["name"] for record in cls.query(deps_cypher, params)]
 
         hierarchy_cypher = """
-            MATCH (s:Service {id: $service_id})-[:CONTAINS]->(m:Module)
-            OPTIONAL MATCH (m)-[:CONTAINS]->(st:Structure)-[:CONTAINS]->(op:Operation)
-            RETURN m.name AS module, st.name AS structure, op.name AS operation
+            MATCH (s:Service {id: $service_id})
+            MATCH (s)-[:CONTAINS*0.. {source_type: 'static'}]->(node)
+            WHERE node:Service OR node:Module OR node:Structure
+            WITH DISTINCT node
+            MATCH (node)-[r:CONTAINS {source_type: 'static'}]->(child)
+            WHERE r.services IS NULL OR $service_id IN r.services
+            RETURN node.id AS parent_id, node.name AS parent_name, labels(node)[0] AS parent_type,
+                   child.id AS child_id, child.name AS child_name, labels(child)[0] AS child_type
         """
-        hierarchy = {}
-        for record in cls.query(hierarchy_cypher, params):
-            module = hierarchy.setdefault(record["module"], {})
-            if record["structure"]:
-                structure_ops = module.setdefault(record["structure"], [])
-                if record["operation"]:
-                    structure_ops.append(record["operation"])
+        hierarchy_records = cls.query(hierarchy_cypher, params)
+        hierarchy = _build_hierarchy_tree(hierarchy_records, service_id)
 
         return {
             "outgoing": counts["outgoing"],
@@ -454,3 +454,37 @@ class Neo4jClient:
             "min_timestamp": record["min_timestamp"],
             "max_timestamp": record["max_timestamp"],
         }
+
+
+def _build_hierarchy_tree(records: list, root_id: str) -> list[dict]:
+    """Build a nested Module/Structure/Operation tree from a flat list of
+    (parent, child) CONTAINS edge records, rooted at root_id.
+
+    Some declared interface paths legitimately nest the same package/interface
+    under more than one parent (e.g. "package_3.package_6.package_11..." and
+    "package_3.package_6.package_10.package_11..." both for the same service).
+    That makes the raw containment data a DAG, not a tree. To avoid rendering
+    the same node twice, each node is placed under exactly one parent: whichever
+    is reached first in a deterministic (alphabetically sorted) depth-first walk.
+    """
+    children_by_parent: dict[str, list[dict]] = {}
+    node_info: dict[str, dict] = {}
+
+    for record in records:
+        node_info[record["parent_id"]] = {"name": record["parent_name"], "type": record["parent_type"]}
+        node_info[record["child_id"]] = {"name": record["child_name"], "type": record["child_type"]}
+        children_by_parent.setdefault(record["parent_id"], []).append(record["child_id"])
+
+    placed = {root_id}
+
+    def build_node(node_id: str):
+        if node_id in placed:
+            return None
+        placed.add(node_id)
+        info = node_info[node_id]
+        child_ids = sorted(children_by_parent.get(node_id, []), key=lambda cid: node_info[cid]["name"])
+        children = [child for cid in child_ids if (child := build_node(cid)) is not None]
+        return {"id": node_id, "name": info["name"], "type": info["type"], "children": children}
+
+    top_ids = sorted(children_by_parent.get(root_id, []), key=lambda cid: node_info[cid]["name"])
+    return [node for cid in top_ids if (node := build_node(cid)) is not None]

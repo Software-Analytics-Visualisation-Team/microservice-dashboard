@@ -7,6 +7,7 @@ import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 import pandas as pd
 import plotly.express as px
+from dash import html
 
 
 def _compute_node_depth(df: pd.DataFrame):
@@ -358,6 +359,37 @@ def build_all_event_code_histogram(data: pd.DataFrame):
     fig = px.bar(event_counts, x="event_code", y="count", title="Call Counts")
     fig.update_layout(height=800)
     return fig
+
+def _render_hierarchy_children(nodes: list[dict]):
+    """Recursively render a list of Module/Structure/Operation tree nodes as a nested <ul>."""
+    if not nodes:
+        return html.P("No interfaces found.", className="text-muted")
+
+    items = []
+    for node in nodes:
+        if node["children"]:
+            items.append(
+                html.Li([
+                    html.Strong(node["name"]),
+                    _render_hierarchy_children(node["children"]),
+                ])
+            )
+        else:
+            items.append(
+                html.Li(node["name"], style={"fontFamily": "monospace", "fontSize": "12px"})
+            )
+    return html.Ul(items)
+
+def build_service_hierarchy_panel(hierarchy: list[dict]):
+    """Render a service's Module/Structure/Operation CONTAINS tree as a collapsible accordion."""
+    if not hierarchy:
+        return html.P("No package data available for this service.", className="text-muted")
+
+    accordion_items = [
+        dbc.AccordionItem(_render_hierarchy_children(module["children"]), title=module["name"])
+        for module in hierarchy
+    ]
+    return dbc.Accordion(accordion_items, start_collapsed=True, always_open=True)
 
 def build_edge_event_code_histogram(data: pd.DataFrame, source: str, target: str):
     df_edge = data[(data["service_name"] == source) & (data["callee"] == target)]
