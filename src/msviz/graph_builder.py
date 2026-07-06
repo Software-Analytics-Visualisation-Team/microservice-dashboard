@@ -124,9 +124,9 @@ def build_graph(runtime_csv: str | Path, static_csv: str | Path) -> dict:
             static_properties_interfaces = static_properties.get("interfaces", [])
             for interface_path in static_properties_interfaces:
                 parts = interface_path.split(".")
-                static_interface_id = _define_node_id(parts[1])
-                add_node(static_interface_id, "Module", name=parts[1])
-                add_edge(static_node_id, static_interface_id, "CONTAINS")
+                static_top_package_id = _define_node_id(parts[0])
+                add_node(static_top_package_id, "Module", name=parts[0])
+                add_edge(static_node_id, static_top_package_id, "CONTAINS")
                 part_index = 0
                 for part in parts[1:]:
                     previous_part_id = _define_node_id(parts[part_index])
