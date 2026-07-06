@@ -480,7 +480,7 @@ def register_callbacks(app, overall_stylesheet):
         N = len(edges) if edges else 0
         max_step = max(N - 1, 0)
         marks = {0: "1", max_step: str(N)} if N > 0 else {0: "0"}
-        return 0, 0, max_step, marks, 0, True, "Play"
+        return {"step": 0, "trace_id": trace_id}, 0, max_step, marks, 0, True, "Play"
 
     @app.callback(
         [
@@ -502,7 +502,7 @@ def register_callbacks(app, overall_stylesheet):
         ],
         prevent_initial_call=True,
     )
-    def handle_replay_controls(_prev, _next, _play, _n_intervals, slider_val, current_step, interval_disabled, trace_id):
+    def handle_replay_controls(_prev, _next, _play, _n_intervals, slider_val, current_step_data, interval_disabled, trace_id):
         triggered = ctx.triggered_id
 
         data = Neo4jClient.retrieve_call_graph_for_trace(trace_id)
@@ -510,7 +510,7 @@ def register_callbacks(app, overall_stylesheet):
 
         N = len(edges) if edges else 0
 
-        step = current_step if current_step is not None else 0
+        step = (current_step_data or {}).get("step", 0)
         disabled = interval_disabled if interval_disabled is not None else True
         play_label = "Pause" if not disabled else "Play"
 
@@ -531,7 +531,7 @@ def register_callbacks(app, overall_stylesheet):
         elif triggered == "replay-step-slider":
             step = slider_val if slider_val is not None else 0
 
-        return step, disabled, play_label
+        return {"step": step, "trace_id": trace_id}, disabled, play_label
 
     @app.callback(
         [
@@ -542,17 +542,20 @@ def register_callbacks(app, overall_stylesheet):
         ],
         [
             Input("replay-step", "data"),
-            Input("trace-id-dropdown", "value"),
         ],
         prevent_initial_call=True,
     )
-    def render_replay_graph(step, trace_id):
-        data = Neo4jClient.retrieve_call_graph_for_trace(trace_id)
-        nodes = data["nodes"]
-        edges = data["edges"]
+    def render_replay_graph(step_data):
+        step_data = step_data or {}
+        trace_id = step_data.get("trace_id")
+        step = step_data.get("step", 0)
 
         if not trace_id or trace_id == "-":
             return [], _REPLAY_STYLESHEET, "No trace selected", ""
+
+        data = Neo4jClient.retrieve_call_graph_for_trace(trace_id)
+        nodes = data["nodes"]
+        edges = data["edges"]
 
         if len(nodes) == 0 or len(edges) == 0:
             return [], _REPLAY_STYLESHEET, "No calls for this trace", ""
@@ -573,7 +576,6 @@ def register_callbacks(app, overall_stylesheet):
         active_edge = None
         cy_edges = []
         for i, edge in enumerate(edges):
-            print(i, edge, step)
             if i < step:
                 cls = "edge-completed"
             elif i == step:
@@ -583,7 +585,7 @@ def register_callbacks(app, overall_stylesheet):
                 cls = "edge-future"
             cy_edges.append({
                 "data": {
-                    "id": f"replay-edge-{i}",
+                    "id": f"replay-edge-{trace_id}-{i}",
                     "source": edge["source"],
                     "target": edge["target"],
                     "label": edge["label"],
@@ -605,5 +607,4 @@ def register_callbacks(app, overall_stylesheet):
             style={"marginTop": "10px"},
         )
 
-        print(nodes, trace_id)
         return cy_nodes + cy_edges, _REPLAY_STYLESHEET, f"Step {step + 1} / {N}", info_panel

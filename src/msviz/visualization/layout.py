@@ -321,7 +321,7 @@ def build_layout(context, overall_stylesheet):
 
     return dbc.Container(
         [
-            dcc.Store(id="replay-step", data=0),
+            dcc.Store(id="replay-step", data={"step": 0, "trace_id": None}),
             dcc.Interval(id="replay-interval", interval=1000, disabled=True),
             dbc.Row([sidebar, main_content], style={"margin": "0", "height": "100vh"}),
         ],
