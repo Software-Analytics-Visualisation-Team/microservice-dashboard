@@ -11,6 +11,7 @@ from .graphs import (
     build_all_event_code_histogram,
     build_edge_event_code_histogram,
     build_event_table,
+    build_full_hierarchy_elements,
     build_selected_edge_violinplot,
     build_service_heatmap_figure,
     build_service_hierarchy_panel,
@@ -264,6 +265,18 @@ def register_callbacks(app, overall_stylesheet):
             })
 
         return elements
+
+    # ------------------------------------------------------------------ #
+    # Graph: Full Hierarchy                                              #
+    # ------------------------------------------------------------------ #
+
+    @app.callback(
+        Output("hierarchy-cytoscape-graph", "elements"),
+        Input("main-tabs", "value"),
+    )
+    def update_full_hierarchy_graph(_active_tab):
+        graph = Neo4jClient.retrieve_full_hierarchy_graph()
+        return build_full_hierarchy_elements(graph)
 
     # ------------------------------------------------------------------ #
     # Graph: Span                                                        #

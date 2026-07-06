@@ -70,4 +70,24 @@ overall_stylesheet = [
             "display": "none",
         },
     },
+    {
+        "selector": "node.hierarchy-system",
+        "style": {"background-color": "#4a90d9"},
+    },
+    {
+        "selector": "node.hierarchy-service",
+        "style": {"background-color": "#7bc67e"},
+    },
+    {
+        "selector": "node.hierarchy-module",
+        "style": {"background-color": "#9b59b6"},
+    },
+    {
+        "selector": "node.hierarchy-structure",
+        "style": {"background-color": "#e74c3c"},
+    },
+    {
+        "selector": "node.hierarchy-operation",
+        "style": {"background-color": "#1abc9c"},
+    },
 ]

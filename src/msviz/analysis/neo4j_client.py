@@ -442,6 +442,27 @@ class Neo4jClient:
         }
 
     @classmethod
+    def retrieve_full_hierarchy_graph(cls) -> dict:
+        """Retrieve the entire static System->Service->Module->Structure->Operation hierarchy."""
+        cypher = """
+            MATCH (a)-[r:CONTAINS {source_type: 'static'}]->(b)
+            WHERE (a:System OR a:Service OR a:Module OR a:Structure)
+              AND (b:Service OR b:Module OR b:Structure OR b:Operation)
+            RETURN a.id AS source_id, a.name AS source_name, labels(a)[0] AS source_label,
+                   b.id AS target_id, b.name AS target_name, labels(b)[0] AS target_label
+        """
+        records = cls.query(cypher)
+
+        nodes = {}
+        edges = []
+        for record in records:
+            nodes[record["source_id"]] = {"id": record["source_id"], "name": record["source_name"], "label": record["source_label"]}
+            nodes[record["target_id"]] = {"id": record["target_id"], "name": record["target_name"], "label": record["target_label"]}
+            edges.append({"source": record["source_id"], "target": record["target_id"]})
+
+        return {"nodes": list(nodes.values()), "edges": edges}
+
+    @classmethod
     def retrieve_time_bounds(cls) -> dict:
         """Retrieve the total invocation count and timestamp range across all data."""
         cypher = """

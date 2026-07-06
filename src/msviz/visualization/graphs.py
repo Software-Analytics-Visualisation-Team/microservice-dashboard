@@ -154,6 +154,22 @@ def get_global_incoming_range(data: pd.DataFrame):
     return min(incoming_counts.values()), max(incoming_counts.values())
 
 
+def build_full_hierarchy_elements(graph: dict):
+    """Build plain (non-compound) cytoscape elements for the full static
+    System->Service->Module->Structure->Operation containment graph."""
+    cy_nodes = [
+        {
+            "data": {"id": node["id"], "label": node["name"]},
+            "classes": f"hierarchy-{node['label'].lower()}",
+        }
+        for node in graph.get("nodes", [])
+    ]
+    cy_edges = [
+        {"data": {"source": edge["source"], "target": edge["target"]}}
+        for edge in graph.get("edges", [])
+    ]
+    return cy_nodes + cy_edges
+
 def build_static_graph_elements(static_data: dict):
     static_data = static_data or {}
     microservices = static_data.get("static_services", {})

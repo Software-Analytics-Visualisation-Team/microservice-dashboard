@@ -313,6 +313,40 @@ def build_layout(context, overall_stylesheet):
                             html.Div(id="replay-info-panel"),
                         ],
                     ),
+                    dcc.Tab(
+                        label="Full Hierarchy",
+                        value="full-hierarchy-graph",
+                        children=[
+                            html.H4(
+                                "Full Static Hierarchy (System -> Service -> Module -> Structure -> Operation)",
+                                style={"marginTop": "40px"},
+                            ),
+                            html.Div(
+                                cyto.Cytoscape(
+                                    id="hierarchy-cytoscape-graph",
+                                    layout={
+                                        "name": "dagre",
+                                        "animate": False,
+                                        "padding": 30,
+                                        "rankDir": "TB",
+                                        "nodeSep": 60,
+                                        "rankSep": 100,
+                                        "edgeSep": 10,
+                                        "ranker": "network-simplex",
+                                    },
+                                    style={"width": "100%", "height": "max(600px, calc(100vh - 114px - 68px - 40px))"},
+                                    elements=[],
+                                    stylesheet=overall_stylesheet,
+                                ),
+                                style={
+                                    "border": "2px solid #0074D9",
+                                    "borderRadius": "8px",
+                                    "padding": "10px",
+                                    "background": "#fff",
+                                },
+                            ),
+                        ],
+                    ),
                 ],
             )
         ],
