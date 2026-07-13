@@ -3,6 +3,7 @@
 from collections import defaultdict, deque
 
 import dash_bootstrap_components as dbc
+from dash import dash_table
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 import pandas as pd
@@ -64,11 +65,97 @@ def build_trace_elements(df: pd.DataFrame):
                         "source": row["service_name"],
                         "target": row["callee"],
                         "label": f"{row['event_code']} (avg: {row['call_duration']:.1f}ms)",
-                    }
+                    },
+                    "classes": "flow",
                 }
             )
 
     return cy_nodes + cy_edges
+
+
+def build_trace_difference_elements(df_a: pd.DataFrame, df_b: pd.DataFrame):
+    # Calculate edges for A and B
+    edges_a = (
+        df_a.dropna(subset=["service_name", "callee", "event_code"])
+        .groupby(["service_name", "callee", "event_code"])["call_duration"]
+        .agg(count="size", avg_duration_ms="mean")
+        .reset_index()
+    )
+    edges_b = (
+        df_b.dropna(subset=["service_name", "callee", "event_code"])
+        .groupby(["service_name", "callee", "event_code"])["call_duration"]
+        .agg(count="size", avg_duration_ms="mean")
+        .reset_index()
+    )
+
+    # Create lookup dictionaries
+    lookup_a = {
+        (row["service_name"], row["callee"], row["event_code"]): row
+        for _, row in edges_a.iterrows()
+    }
+    lookup_b = {
+        (row["service_name"], row["callee"], row["event_code"]): row
+        for _, row in edges_b.iterrows()
+    }
+
+    # Get all unique edges
+    all_keys = sorted(set(lookup_a) | set(lookup_b))
+
+    # Collect all nodes
+    all_nodes = set()
+    for df in [df_a, df_b]:
+        all_nodes.update(set(df["service_name"]).union(set(df["callee"].dropna())))
+
+    # Compute node depths using combined data
+    combined_df = pd.concat([df_a, df_b])
+    node_depth = _compute_node_depth(combined_df)
+
+    # Create nodes
+    cy_nodes = []
+    for node in all_nodes:
+        cy_nodes.append(
+            {
+                "data": {"id": node, "label": node},
+                "position": {
+                    "x": 100 * node_depth.get(node, 0),
+                    "y": 200 * node_depth.get(node, 0),
+                },
+            }
+        )
+
+    # Create edges with colors based on presence
+    cy_edges = []
+    for key in all_keys:
+        row_a = lookup_a.get(key)
+        row_b = lookup_b.get(key)
+
+        if row_a is not None and row_b is not None:
+            presence = "both"
+            color = "green"
+        elif row_a is not None:
+            presence = "only A"
+            color = "blue"
+        else:
+            presence = "only B"
+            color = "orange"
+
+        cy_edges.append(
+            {
+                "data": {
+                    "source": key[0],
+                    "target": key[1],
+                    "label": f"{key[2]} ({presence})",
+                    "presence": presence,
+                },
+                "classes": f"difference {color}",
+                "style": {"line-color": color},
+            }
+        )
+
+    return cy_nodes + cy_edges
+
+
+
 
 
 def build_span_elements(df: pd.DataFrame):
@@ -98,19 +185,24 @@ def build_span_elements(df: pd.DataFrame):
                     "source": row["service_name"],
                     "target": row["callee"],
                     "label": f"{row['event_code']} (avg: {row['call_duration']:.1f}ms)",
-                }
+                },
+                "classes": "flow",
             }
         )
     return cy_nodes + cy_edges
 
 
-def build_service_heatmap_figure(df: pd.DataFrame, service_name: str):
+def build_service_heatmap_figure(df: pd.DataFrame, service_name: str, callee_service: str):
     if not service_name:
         return {}
 
     filtered = df[df["service_name"] == service_name].copy()
     if filtered.empty:
         return {}
+    if callee_service and callee_service != "All":
+        filtered = filtered[filtered["callee"] == callee_service]
+        if filtered.empty:
+            return {}
 
     fig = px.density_heatmap(
         filtered,
@@ -126,7 +218,8 @@ def build_service_heatmap_figure(df: pd.DataFrame, service_name: str):
         },
     )
     fig.update_layout(
-        title=f"Call Duration Heatmap for {service_name}",
+        title=f"Call Duration Heatmap for {service_name}"
+        + (f" → {callee_service}" if callee_service and callee_service != "All" else ""),
         xaxis_title="Event Code",
         yaxis_title="Callee Service",
     )
@@ -136,6 +229,89 @@ def build_service_heatmap_figure(df: pd.DataFrame, service_name: str):
 def build_event_table(df: pd.DataFrame):
     table_df = df[["service_name", "callee", "event_code", "call_duration"]]
     return dbc.Table.from_dataframe(table_df, striped=True, bordered=True, hover=True)
+
+
+def build_trace_comparison_table(df_a: pd.DataFrame, df_b: pd.DataFrame, trace_a, trace_b):
+    edges_a = (
+        df_a.dropna(subset=["service_name", "callee", "event_code"])
+        .groupby(["service_name", "callee", "event_code"])["call_duration"]
+        .agg(count="size", avg_duration_ms="mean")
+        .reset_index()
+    )
+    edges_b = (
+        df_b.dropna(subset=["service_name", "callee", "event_code"])
+        .groupby(["service_name", "callee", "event_code"])["call_duration"]
+        .agg(count="size", avg_duration_ms="mean")
+        .reset_index()
+    )
+
+    lookup_a = {
+        (row["service_name"], row["callee"], row["event_code"]): row
+        for _, row in edges_a.iterrows()
+    }
+    lookup_b = {
+        (row["service_name"], row["callee"], row["event_code"]): row
+        for _, row in edges_b.iterrows()
+    }
+
+    rows = []
+    all_keys = sorted(set(lookup_a) | set(lookup_b))
+    for key in all_keys:
+        row_a = lookup_a.get(key)
+        row_b = lookup_b.get(key)
+
+        if row_a is not None and row_b is not None:
+            presence = "both"
+        elif row_a is not None:
+            presence = "only A"
+        else:
+            presence = "only B"
+
+        avg_a = float(row_a["avg_duration_ms"]) if row_a is not None else None
+        avg_b = float(row_b["avg_duration_ms"]) if row_b is not None else None
+        duration_delta = (avg_b - avg_a) if (avg_a is not None and avg_b is not None) else None
+
+        rows.append(
+            {
+                "source": key[0],
+                "target": key[1],
+                "event_code": key[2],
+                "presence": presence,
+                "count_a": int(row_a["count"]) if row_a is not None else 0,
+                "count_b": int(row_b["count"]) if row_b is not None else 0,
+                "avg_duration_a_ms": round(avg_a, 2) if avg_a is not None else None,
+                "avg_duration_b_ms": round(avg_b, 2) if avg_b is not None else None,
+                "delta_b_minus_a_ms": round(duration_delta, 2) if duration_delta is not None else None,
+            }
+        )
+
+    if not rows:
+        return (
+            f"No comparable edges found for trace A={trace_a} and trace B={trace_b} "
+            "in the selected time range."
+        )
+
+    compare_df = pd.DataFrame(rows).sort_values(by=["presence", "source", "target", "event_code"])
+
+    return dash_table.DataTable(
+        id="trace-compare-datatable",
+        columns=[{"name": c, "id": c} for c in compare_df.columns],
+        data=compare_df.to_dict("records"),
+        filter_action="native",
+        sort_action="native",
+        sort_mode="multi",
+        page_action="native",
+        page_size=20,
+        style_table={"overflowX": "auto", "minWidth": "100%"},
+        style_cell={
+            "textAlign": "left",
+            "padding": "8px",
+            "minWidth": "120px",
+            "width": "120px",
+            "maxWidth": "300px",
+        },
+        style_header={"backgroundColor": "#f8f9fa", "fontWeight": "bold"},
+    )
 
 
 def get_global_incoming_range(data: pd.DataFrame):
@@ -151,11 +327,86 @@ def get_global_incoming_range(data: pd.DataFrame):
     return min(incoming_counts.values()), max(incoming_counts.values())
 
 
+def build_static_graph_elements(static_data: dict):
+    static_data = static_data or {}
+    microservices = static_data.get("static_services", {})
+    packages = static_data.get("packages", {})
+    functions = static_data.get("functions", {})
+
+    def _node_id(entity_type: str, name: str) -> str:
+        if entity_type == "microservice":
+            return name
+        return f"static:{entity_type}:{name}"
+
+    name_to_id = {}
+    for name in microservices:
+        name_to_id[name] = _node_id("microservice", name)
+    for name in packages:
+        name_to_id[name] = _node_id("package", name)
+    for name in functions:
+        name_to_id[name] = _node_id("function", name)
+
+    cy_nodes = []
+    for idx, name in enumerate(sorted(microservices.keys())):
+        cy_nodes.append(
+            {
+                "data": {"id": _node_id("microservice", name), "label": name},
+                "classes": "node",
+                "position": {"x": 80, "y": 80 + idx * 70},
+            }
+        )
+
+    for idx, value in packages.items():
+        parent_id = name_to_id.get(value.get("parent"))
+        cy_nodes.append(
+            {
+                "data": {
+                    "id": _node_id("package", idx),
+                    "label": idx,
+                    "parent": parent_id,
+                },
+                "classes": "static static-package static-hidden",
+            }
+        )
+
+    for idx, value in functions.items():
+        parent_id = name_to_id.get(value.get("parent"))
+        cy_nodes.append(
+            {
+                "data": {
+                    "id": _node_id("function", idx),
+                    "label": idx,
+                    "parent": parent_id,
+                },
+                "classes": "static static-function static-hidden",
+            }
+        )
+
+    cy_edges = []
+    for name, properties in microservices.items():
+        for dependency in properties.get("dependencies", []) or []:
+            if dependency not in microservices:
+                continue
+            cy_edges.append(
+                {
+                    "data": {
+                        "source": _node_id("microservice", name),
+                        "target": _node_id("microservice", dependency),
+                        "label": "",
+                    },
+                    "classes": "static static-edge",
+                }
+            )
+
+    return cy_nodes + cy_edges
+
+
 def build_overall_graph_elements(
     filtered_data: pd.DataFrame,
     global_min_count: int,
     global_max_count: int,
     selected_trace_id=None,
+    static_elements=None,
 ):
     df_grouped = (
         filtered_data.dropna(subset=["service_name", "callee"])
@@ -180,13 +431,12 @@ def build_overall_graph_elements(
 
     cy_nodes = []
     for node in nodes:
-        node_data = {"id": node, "label": node}
         count = incoming_counts.get(node, 0)
         hex_color = mcolors.rgb2hex(cmap(norm(count)))
         classes = "selected" if node in selected_nodes else ""
         cy_nodes.append(
             {
-                "data": node_data,
+                "data": {"id": node, "label": node},
                 "classes": classes,
                 "style": {"background-color": hex_color},
             }
@@ -194,7 +444,9 @@ def build_overall_graph_elements(
 
     cy_edges = []
     for _, row in df_grouped.iterrows():
-        classes = "selected" if (row["service_name"], row["callee"]) in selected_edges else ""
+        classes = "flow"
+        if (row["service_name"], row["callee"]) in selected_edges:
+            classes += " selected"
         cy_edges.append(
             {
                 "data": {
@@ -206,20 +458,35 @@ def build_overall_graph_elements(
             }
         )
 
-    return cy_nodes + cy_edges
+    runtime_node_ids = {element["data"]["id"] for element in cy_nodes}
+    static_elements = static_elements or []
+
+    included_static_nodes = []
+    included_static_node_ids = set()
+    for element in static_elements:
+        data = element.get("data", {})
+        if "source" in data:
+            continue
+
+        node_id = data.get("id")
+        parent_id = data.get("parent")
+        if node_id in runtime_node_ids or parent_id in runtime_node_ids:
+            included_static_nodes.append(element)
+            included_static_node_ids.add(node_id)
+
+    included_static_edges = []
+    for element in static_elements:
+        data = element.get("data", {})
+        source = data.get("source")
+        target = data.get("target")
+        if not source or not target:
+            continue
+        if source in runtime_node_ids and target in runtime_node_ids:
+            included_static_edges.append(element)
+
+    return cy_nodes + included_static_nodes + cy_edges + included_static_edges
 
 
-def build_all_event_code_histogram(data: pd.DataFrame):
-    event_counts = (
-        data.groupby("event_code")
-        .size()
-        .reset_index(name="count")
-        .sort_values("count", ascending=False)
-    )
-
-    fig = px.bar(event_counts, x="event_code", y="count", title="Call Counts")
-    fig.update_layout(height=800)
-    return fig
 
 
 def build_selected_edge_violinplot(
@@ -242,6 +509,17 @@ def build_selected_edge_violinplot(
     fig.update_layout(height=500)
     return fig
 
+def build_all_event_code_histogram(data: pd.DataFrame):
+    event_counts = (
+        data.groupby("event_code")
+        .size()
+        .reset_index(name="count")
+        .sort_values("count", ascending=False)
+    )
+
+    fig = px.bar(event_counts, x="event_code", y="count", title="Call Counts")
+    fig.update_layout(height=800)
+    return fig
 
 def build_edge_event_code_histogram(data: pd.DataFrame, source: str, target: str):
     df_edge = data[(data["service_name"] == source) & (data["callee"] == target)]
